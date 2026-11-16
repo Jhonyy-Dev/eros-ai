@@ -52,8 +52,8 @@ def main():
     status, cuerpo, _ = c.pedir("/api/estado")
     est = json.loads(cuerpo)
     exitos.append(ok("sesion reconocida", est.get("sesion") is True and est.get("nombre") == "profe"))
-    exitos.append(ok("modelo visible correcto", est.get("modelo_visible") == "DeepSeek V4.1 Flash", est.get("modelo_visible")))
-    exitos.append(ok("limites configurados", est.get("limite_dia") == 100 and est.get("limite_minuto") == 10,
+    exitos.append(ok("modelo visible correcto", est.get("modelo_visible") == "Eros AI/Sin sensura", est.get("modelo_visible")))
+    exitos.append(ok("limites configurados", est.get("limite_dia") == 25 and est.get("limite_minuto") == 10,
                      (est.get("limite_dia"), est.get("limite_minuto"))))
 
     print("4) peticion real 'hola' en streaming")

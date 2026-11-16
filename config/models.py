@@ -6,7 +6,8 @@ Hoy hay UN modelo habilitado para alumnos. Los demas quedan listos pero apagados
 MODELOS = [
     {
         "id": "deepseek-v4.1-flash",
-        "visible": "DeepSeek V4.1 Flash",
+        "visible": "Eros AI/Sin sensura",
+        "motor_visible": "DeepSeek V4.1 Flash",
         "backend": "openrouter",
         "modelo_openrouter": "deepseek/deepseek-v4.1-flash-1017",
         "habilitado": True,

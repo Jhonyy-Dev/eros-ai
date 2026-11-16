@@ -248,6 +248,7 @@ def estado(req: Request):
         "sesion": bool(nombre),
         "nombre": nombre,
         "modelo_visible": modelo["visible"],
+        "motor": modelo.get("motor_visible") or modelo["visible"],
         "backend": CFG.get("BACKEND") or "openrouter",
         "respaldo_local": (CFG.get("FALLBACK_LOCAL", "true").lower() == "true"),
         "usados_hoy": reg.get("mensajes", 0),
@@ -273,7 +274,8 @@ def uso(req: Request):
             "total_tokens": sum(v.get("tokens", 0) for v in u["alumnos"].values()),
             "costo_total": round(u.get("costo_total", 0.0), 6),
             "alumnos": [{"nombre": n, **v} for n, v in orden],
-            "ultimas": list(reversed((u.get("log") or [])[-60:])), "modelo": models.activo(CFG)["visible"]}
+            "ultimas": list(reversed((u.get("log") or [])[-60:])),
+            "modelo": models.activo(CFG)["visible"], "motor": models.activo(CFG).get("motor_visible") or ""}
 
 
 @app.get("/api/diagnostico")

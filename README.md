@@ -32,7 +32,7 @@ La URL pública del túnel se imprime al arrancar, queda en `url_publica.txt`, e
 | `FALLBACK_LOCAL` | si OpenRouter falla, sigue con el modelo local | true |
 | `MAX_TOKENS` | tope de salida por respuesta | 4096 |
 | `MAX_MENSAJES_CONTEXTO` / `MAX_TOKENS_CONTEXTO` | historial enviado | 20 / 32000 |
-| `LIMITE_MENSAJES_DIA` / `LIMITE_MENSAJES_MINUTO` | límites por alumno | 100 / 10 |
+| `LIMITE_MENSAJES_DIA` / `LIMITE_MENSAJES_MINUTO` | límites por alumno | 25 / 10 |
 | `ALUMNOS` | nombre:codigo separado por comas | profe:eros2026 |
 | `SESSION_SECRET` | firma de la cookie | — |
 | `PUERTO` | puerto de la web | 8090 |

@@ -53,7 +53,7 @@ async function pintar(){
     ['tokens hoy', num(d.total_tokens)],
     ['costo hoy', 'US$ ' + (d.costo_total || 0).toFixed(4)],
     ['alumnos activos', Object.keys(d.alumnos || {}).length],
-    ['modelo', d.modelo || '-']
+    ['modelo', d.motor || d.modelo || '-']
   ].map(([k,v]) => '<div class="t"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>').join('');
   $('#alumnos').innerHTML = (d.alumnos && d.alumnos.length)
     ? d.alumnos.map(a => '<tr><td>'+a.nombre+'</td><td>'+num(a.mensajes)+'</td><td class="mono">'+num(a.tokens)+'</td><td class="mono">US$ '+(a.costo||0).toFixed(4)+'</td><td class="mono">'+(a.primera||'-')+'</td><td class="mono">'+(a.ultima||'-')+'</td></tr>').join('')

@@ -274,7 +274,7 @@ async function estado(){
     $('#restantes').textContent = d.restantes_hoy + ' / ' + d.limite_dia + ' hoy';
     $('#tokens').textContent = d.usados_hoy + ' mensajes usados · ' + d.tokens_hoy.toLocaleString('es') + ' tokens';
     modeloVisible = d.modelo_visible;
-    $('#modelo').textContent = 'modelo: ' + d.modelo_visible;
+    $('#modelo').textContent = d.modelo_visible;
     $('#modeloLado').textContent = d.modelo_visible;
     $('#enviar').disabled = d.restantes_hoy <= 0 || enviando;
     if (d.respaldo_local && (d.backend === 'openrouter')) franja('');
@@ -299,7 +299,24 @@ async function enviar(rehacer = false){
   ctrl = new AbortController();
   const destino = turno('assistant', '');
   destino.innerHTML = '<span class="puntos"><i></i><i></i><i></i></span>';
-  let acumulado = '';
+  let acumulado = '', pendiente = '', revelado = '', ultimoMd = 0, animando = false;
+  const paso = () => {
+    if (!pendiente){
+      if (ultimoMd !== -1){ destino.innerHTML = md(revelado || acumulado); ultimoMd = -1; destino.classList.remove('cursor'); bajar(); }
+      animando = false; return;
+    }
+    const n = Math.max(3, Math.ceil(pendiente.length / 10));
+    revelado += pendiente.slice(0, n);
+    pendiente = pendiente.slice(n);
+    const ahora = performance.now();
+    if (ahora - ultimoMd > 380){ ultimoMd = ahora; destino.innerHTML = md(revelado); }
+    else destino.textContent = revelado;
+    destino.classList.add('cursor');
+    bajar();
+    requestAnimationFrame(paso);
+  };
+  const empujar = t => { pendiente += t; if (!animando){ animando = true; requestAnimationFrame(paso); } };
+  const terminar = () => new Promise(res => { const ver = () => (animando ? setTimeout(ver, 50) : res()); ver(); });
   try {
     const r = await fetch('/api/chat', {
       method:'POST', signal: ctrl.signal,
@@ -322,18 +339,19 @@ async function enviar(rehacer = false){
       for (const p of partes){
         if (!p.startsWith('data: ')) continue;
         let j; try { j = JSON.parse(p.slice(6)); } catch(e){ continue; }
-        if (j.t){ acumulado += j.t; destino.innerHTML = md(acumulado); destino.classList.add('cursor'); bajar(); }
+        if (j.t){ acumulado += j.t; empujar(j.t); }
         if (j.modelo){ const e = destino.closest('.turno').querySelector('#etq'); if (e) e.textContent = j.backend === 'local' ? 'respaldo local' : 'en la nube'; }
         if (j.aviso) franja('OpenRouter no respondió: sigo con el modelo local. (' + j.aviso.replace('respaldo local activo: ','') + ')');
         if (j.error){ aviso(j.error); if (!acumulado) destino.innerHTML = '<span style="color:var(--fg2)">' + j.error + '</span>'; }
       }
     }
+    await terminar();
     destino.classList.remove('cursor');
     if (acumulado){ c.mensajes.push({ role:'assistant', content: acumulado }); guardar(); pintarLista(); }
     else if (!c.mensajes.length || c.mensajes[c.mensajes.length-1].role !== 'assistant'){ c.mensajes.push({ role:'assistant', content:'(sin respuesta)' }); guardar(); }
   } catch(e){
     destino.classList.remove('cursor');
-    if (e.name === 'AbortError'){ if (acumulado){ destino.innerHTML = md(acumulado); c.mensajes.push({ role:'assistant', content:acumulado }); guardar(); } else destino.innerHTML = '<span style="color:var(--fg2)">detenido</span>'; }
+    if (e.name === 'AbortError'){ pendiente = ''; if (acumulado){ destino.innerHTML = md(acumulado); c.mensajes.push({ role:'assistant', content:acumulado }); guardar(); } else destino.textContent = 'detenido'; }
     else aviso('problema de red, intenta otra vez');
   } finally {
     enviando = false; $('#enviar').innerHTML = '↑'; estado();
