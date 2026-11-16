@@ -7,7 +7,7 @@
 <link rel="icon" href="/static/eros.jpg">
 <style>
   :root{ --bg:#0b0b0c; --fg:#f2f2f3; --fg2:#9b9ba1; --line:#232326; --soft:#141416;
-    --verde:#5ef08f; --verde2:rgba(94,240,143,.12);
+    --verde:#ffffff; --verde2:rgba(255,255,255,.10);
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   *{box-sizing:border-box}
@@ -31,32 +31,32 @@
   .chip .cursor{display:inline-block;width:7px;height:12px;background:var(--verde);animation:parp 1.05s steps(1) infinite}
   @keyframes parp{50%{opacity:0}}
 
-  .clave{position:relative;border:1px solid #2a3a2f;border-radius:12px;background:#08110c;overflow:hidden;
+  .clave{position:relative;border:1px solid var(--line);border-radius:12px;background:#000000;overflow:hidden;
     transition:border-color .18s, box-shadow .18s}
   .clave::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
-    background:repeating-linear-gradient(180deg, rgba(94,240,143,.05) 0 1px, transparent 1px 3px)}
+    background:repeating-linear-gradient(180deg, rgba(255,255,255,.05) 0 1px, transparent 1px 3px)}
   .clave .scan{position:absolute;top:0;bottom:0;width:26%;z-index:3;pointer-events:none;
-    background:linear-gradient(90deg,transparent,rgba(94,240,143,.16),transparent);animation:barrido 2.6s linear infinite}
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.16),transparent);animation:barrido 2.6s linear infinite}
   @keyframes barrido{from{transform:translateX(-120%)}to{transform:translateX(520%)}}
-  .clave.viva{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde2), 0 0 22px rgba(94,240,143,.18)}
+  .clave.viva{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde2), 0 0 22px rgba(255,255,255,.18)}
   .clave.bien{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde2)}
   .clave .visor{position:absolute;inset:0;z-index:2;display:flex;align-items:center;
     padding:12px 62px 12px 14px;font:16px/1.2 var(--mono),"Segoe UI Symbol",sans-serif;letter-spacing:.18em;color:var(--verde);
-    white-space:pre;pointer-events:none;text-shadow:0 0 9px rgba(94,240,143,.34)}
+    white-space:pre;pointer-events:none;text-shadow:0 0 9px rgba(255,255,255,.34)}
   .clave input{position:relative;z-index:2;background:transparent;color:transparent;caret-color:var(--verde);
     border:0;border-radius:12px;padding:12px 62px 12px 14px;font:16px/1.2 var(--mono),"Segoe UI Symbol",sans-serif;letter-spacing:.18em}
   .clave input::placeholder{color:transparent}
-  .clave input::selection{background:var(--verde);color:#04120a}
+  .clave input::selection{background:var(--verde);color:#000000}
   .ojo{position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:4;width:36px;height:36px;
-    display:grid;place-items:center;border:1px solid #2a3a2f;border-radius:10px;background:#0a140e;color:var(--verde);cursor:pointer}
-  .ojo:hover{border-color:var(--verde);background:#0f1d14}
+    display:grid;place-items:center;border:1px solid var(--line);border-radius:10px;background:#000000;color:var(--verde);cursor:pointer}
+  .ojo:hover{border-color:var(--verde);background:#1c1c1f}
   .ojo svg{width:20px;height:20px}
   .ojo .cerrado{display:none}
   .ojo[aria-pressed="true"] .abierto{display:none}
   .ojo[aria-pressed="true"] .cerrado{display:block}
-  .clave input:-webkit-autofill{-webkit-text-fill-color:transparent;box-shadow:0 0 0 40px #08110c inset;transition:none}
+  .clave input:-webkit-autofill{-webkit-text-fill-color:transparent;box-shadow:0 0 0 40px #000000 inset;transition:none}
   .visor.fantasma{opacity:.42}
-  .pista{font:11px/1.4 var(--mono);color:#4d6b57;margin-top:7px;letter-spacing:.06em;min-height:15px}
+  .pista{font:11px/1.4 var(--mono);color:#8a8a90;margin-top:7px;letter-spacing:.06em;min-height:15px}
   .pista b{color:var(--verde);font-weight:600}
 
   button.enviar{width:100%;margin-top:20px;padding:13px;border:0;border-radius:12px;background:var(--fg);color:var(--bg);
