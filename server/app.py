@@ -269,11 +269,37 @@ def uso(req: Request):
     if not sesion(req):
         raise HTTPException(401, "sin sesion")
     u = leer_uso()
+    ahora = datetime.datetime.now()
+
+    def estado_alumno(v: dict) -> str:
+        ultimo = v.get("ultima")
+        if not ultimo:
+            return "sin actividad"
+        try:
+            seg = (ahora - datetime.datetime.strptime(ultimo, "%Y-%m-%d %H:%M:%S")).total_seconds()
+        except Exception:
+            return "?"
+        if seg < 120:
+            return "en línea"
+        if seg < 900:
+            return "activo hace " + str(int(seg // 60)) + " min"
+        if seg < 86400:
+            return "hace " + str(int(seg // 3600)) + " h"
+        return "ayer o antes"
+
     orden = sorted(u["alumnos"].items(), key=lambda x: x[1].get("mensajes", 0), reverse=True)
+    filas = []
+    activos = 0
+    for n, v in orden:
+        est = estado_alumno(v)
+        if est.startswith("en línea") or est.startswith("activo"):
+            activos += 1
+        filas.append({"nombre": n, **v, "estado": est})
     return {"fecha": u["fecha"], "total_mensajes": sum(v.get("mensajes", 0) for v in u["alumnos"].values()),
             "total_tokens": sum(v.get("tokens", 0) for v in u["alumnos"].values()),
             "costo_total": round(u.get("costo_total", 0.0), 6),
-            "alumnos": [{"nombre": n, **v} for n, v in orden],
+            "activos_15min": activos, "configurados": len(alumnos()),
+            "alumnos": filas,
             "ultimas": list(reversed((u.get("log") or [])[-60:])),
             "modelo": models.activo(CFG)["visible"], "motor": models.activo(CFG).get("motor_visible") or ""}
 
