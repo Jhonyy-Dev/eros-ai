@@ -35,14 +35,21 @@ PERSONA = (RAIZ / "config" / "personas" / "eros.txt").read_text(encoding="utf-8"
 def cargar_env() -> dict:
     cfg = {}
     archivo = RAIZ / ".env"
-    if not archivo.exists():
-        return cfg
-    for linea in archivo.read_text(encoding="utf-8-sig").splitlines():
-        linea = linea.strip()
-        if not linea or linea.startswith("#") or "=" not in linea:
-            continue
-        k, v = linea.split("=", 1)
-        cfg[k.strip()] = v.strip().strip('"').strip("'")
+    if archivo.exists():
+        for linea in archivo.read_text(encoding="utf-8-sig").splitlines():
+            linea = linea.strip()
+            if not linea or linea.startswith("#") or "=" not in linea:
+                continue
+            k, v = linea.split("=", 1)
+            cfg[k.strip()] = v.strip().strip('"').strip("'")
+    # en la nube la configuracion viene por variables de entorno, no por archivo
+    for k in ("API_KEY", "MODELO_ACTIVO", "BACKEND", "FALLBACK_LOCAL", "OPENROUTER_URL", "HTTP_REFERER",
+              "MAX_TOKENS", "MAX_MENSAJES_CONTEXTO", "MAX_TOKENS_CONTEXTO", "LIMITE_MENSAJES_DIA",
+              "LIMITE_MENSAJES_MINUTO", "ALUMNOS", "SESSION_SECRET", "PUERTO", "LOCAL_URL", "LOCAL_KEY",
+              "ENABLE_STUDENT_API_KEYS"):
+        v = os.environ.get(k)
+        if v:
+            cfg[k] = v
     return cfg
 
 
@@ -371,4 +378,7 @@ async def chat(req: Request, body: dict = Body(...)):
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=int(CFG.get("PUERTO") or 8090), log_level="warning")
+    import os
+    host = os.environ.get("HOST", "127.0.0.1")
+    puerto = int(os.environ.get("PORT") or CFG.get("PUERTO") or 8090)
+    uvicorn.run(app, host=host, port=puerto, log_level="warning")
