@@ -1,0 +1,13 @@
+{
+  "clave_acceso": "sinfiltros-wyk4nl",
+  "limite_diario_por_ip": 20,
+  "tope_global_diario": 400,
+  "fecha_fin": "2026-11-20T23:59:59",
+  "max_tokens_defecto": 600,
+  "max_tokens_tope": 800,
+  "max_peticiones_en_vuelo_por_ip": 2,
+  "max_mensajes_contexto": 20,
+  "temperatura": 0.45,
+  "upstream": "http://127.0.0.1:8099",
+  "upstream_api_key": "d31666bce0c8829810f9748d590a28d0"
+}

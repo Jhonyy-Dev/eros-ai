@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+bin/
+logs/
+datos/
+url_publica.txt
