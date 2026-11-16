@@ -13,9 +13,9 @@
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
   body{background:#000;color:var(--fg);font:16px/1.6 var(--sans);display:grid;place-items:center;padding:24px}
-  #fondo{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.55;filter:contrast(1.08)}
+  #fondo{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.78;filter:contrast(1.06)}
   #velo{position:fixed;inset:0;z-index:1;pointer-events:none;
-    background:radial-gradient(120% 120% at 50% 38%, rgba(11,11,12,.30) 0%, rgba(11,11,12,.86) 62%, rgba(11,11,12,.96) 100%)}
+    background:radial-gradient(120% 120% at 50% 38%, rgba(11,11,12,.18) 0%, rgba(11,11,12,.72) 60%, rgba(11,11,12,.92) 100%)}
   .caja{position:relative;z-index:2}
   .caja{width:100%;max-width:420px;border:1px solid var(--line);border-radius:20px;padding:26px;background:rgba(20,20,22,.92);backdrop-filter:blur(3px);
     box-shadow:0 0 0 1px rgba(255,255,255,.02), 0 24px 60px rgba(0,0,0,.45)}
@@ -72,7 +72,7 @@
 </style>
 </head>
 <body>
-  <video id="fondo" src="/static/fondo.mp4" autoplay muted loop playsinline preload="auto" aria-hidden="true"></video>
+  <video id="fondo" src="/static/atack.mp4" autoplay muted loop playsinline preload="auto" aria-hidden="true"></video>
   <div id="velo" aria-hidden="true"></div>
   <form class="caja" method="post" action="/login" id="forma">
     <img class="logo" src="/static/eros.jpg" alt="Eros">
@@ -137,6 +137,7 @@
     const fin = destino();
     const inicio = performance.now();
     const paso = ahora => {
+      if (textoActual() !== real){ animando = false; return descifrar(180); }
       const p = Math.min(1, (ahora - inicio) / duracion);
       let salida = "";
       for (let i = 0; i < real.length; i++){
@@ -159,12 +160,19 @@
   ojo.addEventListener('click', () => {
     visible = !visible;
     ojo.setAttribute('aria-pressed', String(visible));
+    if (!campo.value.length){
+      if (animando){ cancelAnimationFrame(animando); animando = false; }
+      pintar("k3m7pq", true); actualizarPista(); return;
+    }
     descifrar(520);
   });
 
   campo.addEventListener('input', () => {
     clearTimeout(temporizador);
-    if (!campo.value.length){ pintar("k3m7pq", true); actualizarPista(); return; }
+    if (!campo.value.length){
+      if (animando){ cancelAnimationFrame(animando); animando = false; }
+      pintar("k3m7pq", true); actualizarPista(); return;
+    }
     descifrar(260);
     temporizador = setTimeout(actualizarPista, 300);
   });
