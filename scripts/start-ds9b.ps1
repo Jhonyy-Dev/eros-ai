@@ -1,5 +1,5 @@
 param(
-  [ValidateSet('raw','directo','pensante','liberado','duro','duro2','duro3','duro4','eros')] [string]$Modo = 'eros',
+  [ValidateSet('raw','directo','pensante','liberado','duro','duro2','duro3','duro4','eros','eros2')] [string]$Modo = 'eros2',
   [int]$Slots = 12,
   [int]$Ctx = 65536,
   [int]$Puerto = 8099,
@@ -12,11 +12,11 @@ param(
 )
 $ErrorActionPreference = 'Continue'
 $raiz = Split-Path -Parent $PSScriptRoot
-$bin    = Join-Path $raiz 'bin\llama-server.exe'
-$cmd    = Join-Path $raiz 'bin\run-ds9b.cmd'
-$log    = Join-Path $raiz 'logs\modelo.log'
-$vbs    = Join-Path ([Environment]::GetFolderPath('Startup')) 'Eros Modelo.vbs'
-$modelo = Join-Path $raiz 'config\ds9b-' + $Modo + '.jinja'
+$bin = Join-Path $raiz 'bin\llama-server.exe'
+$cmd = Join-Path $raiz 'bin\run-ds9b.cmd'
+$log = Join-Path $raiz 'logs\modelo.log'
+$vbs = Join-Path ([Environment]::GetFolderPath('Startup')) 'Eros Modelo.vbs'
+$jinja = Join-Path $raiz ('config\ds9b-' + $Modo + '.jinja')
 
 function Env([string]$k) {
   $linea = (Get-Content (Join-Path $raiz '.env') -ErrorAction SilentlyContinue) | Where-Object { $_ -like "$k=*" } | Select-Object -First 1
@@ -34,26 +34,27 @@ for ($w = 0; $w -lt 45; $w++) {
   if ([int](nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits) -gt 5000) { break }
 }
 
-$a = @('--model', $blob, '--host', '0.0.0.0', '--port', "$Puerto", '--no-webui', '--offline',
-       '-c', "$Ctx", '-np', "$Slots", '--cont-batching', '--flash-attn', 'on',
-       '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
-       '-ngl', '99', '-b', '512', '-ub', '256', '--threads', '12',
-       '--metrics', '--slots',
-       '--temp', "$Temp", '--top-p', "$TopP", '--min-p', "$MinP", '--repeat-penalty', "$RepPen',
-       '--log-file', $log)
-if ($Modo -ne 'raw') { $a = $a + @('--chat-template-file', $modelo) }
-if ($ApiKey -ne '') { $a = $a + @('--api-key', $ApiKey) }
-$linea = $a -join ' '
+$args = @('--model', $blob, '--host', '0.0.0.0', '--port', "$Puerto", '--no-webui', '--offline',
+          '-c', "$Ctx", '-np', "$Slots", '--cont-batching', '--flash-attn', 'on',
+          '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0',
+          '-ngl', '99', '-b', '512', '-ub', '256', '--threads', '12',
+          '--metrics', '--slots',
+          '--temp', "$Temp", '--top-p', "$TopP", '--min-p', "$MinP", '--repeat-penalty', "$RepPen",
+          '--log-file', $log)
+if ($Modo -ne 'raw') { $args = $args + @('--chat-template-file', $jinja) }
+if ($ApiKey -ne '') { $args = $args + @('--api-key', $ApiKey) }
+$linea = $args -join ' '
 
-$L1 = '@echo off'
-$L2 = 'tasklist /fi "imagename eq llama-server.exe" | find /i "llama-server.exe" >nul'
-$L3 = 'if not errorlevel 1 exit /b'
-$L4 = "`"$bin`" $linea >> `"$(Join-Path $raiz 'logs\modelo-stdout.log')`" 2>&1"
-[IO.File]::WriteAllText($cmd, ((@($L1, $L2, $L3, $L4) -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
+$logOut = Join-Path $raiz 'logs\modelo-stdout.log'
+$l1 = '@echo off'
+$l2 = 'tasklist /fi "imagename eq llama-server.exe" | find /i "llama-server.exe" >nul'
+$l3 = 'if not errorlevel 1 exit /b'
+$l4 = '"' + $bin + '" ' + $linea + ' >> "' + $logOut + '" 2>&1'
+[IO.File]::WriteAllText($cmd, ((@($l1, $l2, $l3, $l4) -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
 
-$V1 = 'Set sh = CreateObject("WScript.Shell")'
-$V2 = 'sh.Run "cmd.exe /c ""' + $cmd + '""", 0, False'
-[IO.File]::WriteAllText($vbs, ((@($V1, $V2) -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
+$v1 = 'Set sh = CreateObject("WScript.Shell")'
+$v2 = 'sh.Run "cmd.exe /c ""' + $cmd + '""", 0, False'
+[IO.File]::WriteAllText($vbs, ((@($v1, $v2) -join "`r`n") + "`r`n"), [Text.Encoding]::ASCII)
 
 ([wmiclass]'Win32_Process').Create("cmd.exe /c `"$cmd`"") | Out-Null
 
@@ -65,14 +66,5 @@ for ($i = 0; $i -lt 60; $i++) {
 }
 $proc = Get-Process llama-server -ErrorAction SilentlyContinue
 $vram = [int](nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits)
-if ($ok -and $proc -and $vram -lt 3000) {
-  "AVISO: no cargo en GPU (vram=$vram). Relanzo una vez."
-  Get-Process llama-server -ErrorAction SilentlyContinue | Stop-Process -Force
-  for ($w = 0; $w -lt 45; $w++) { Start-Sleep -Seconds 1; if ([int](nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits) -gt 5000) { break } }
-  ([wmiclass]'Win32_Process').Create("cmd.exe /c `"$cmd`"") | Out-Null
-  for ($i = 0; $i -lt 60; $i++) { Start-Sleep -Seconds 2; try { $h = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "http://127.0.0.1:$Puerto/health").Content } catch { $h = '' }; if ($h -match 'ok') { break } }
-  $proc = Get-Process llama-server -ErrorAction SilentlyContinue
-  $vram = [int](nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits)
-}
 if ($ok -and $proc) { "MODELO ARRANCADO pid=$($proc.Id) modo=$Modo slots=$Slots ctx=$Ctx vram=${vram}MiB" }
 else { "FALLO el modelo, revisa $log" }

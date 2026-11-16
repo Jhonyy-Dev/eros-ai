@@ -321,7 +321,7 @@ async function enviar(rehacer = false){
     const r = await fetch('/api/chat', {
       method:'POST', signal: ctrl.signal,
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ mensajes: c.mensajes.slice(-18), max_tokens: 4096 })
+      body: JSON.stringify({ mensajes: c.mensajes.slice(-18), max_tokens: 8192 })
     });
     if (!r.ok){
       const e = await r.json().catch(() => ({ detail:'error ' + r.status }));
