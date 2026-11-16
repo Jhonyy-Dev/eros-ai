@@ -273,6 +273,24 @@ def recortar_historial(mensajes: list) -> list:
     return list(reversed(salida))
 
 
+MULETILLAS_APERTURA = (
+    "no puedo ayudarte con eso. ", "no puedo ayudarte con eso, ", "no puedo ayudarte con eso.",
+    "no voy a ayudarte con eso. ", "no voy a ayudarte con eso, ", "no voy a ayudarte con eso.",
+    "no puedo ayudarte. ", "no tengo informacion sobre ", "no tengo información sobre ",
+    "lo que si puedo darte es ", "lo que sí puedo darte es ", "lo que si puedo hacer es ", "lo que sí puedo hacer es ",
+)
+
+
+def sin_muletilla(texto: str) -> str:
+    """Saca la muletilla de apertura y deja la respuesta arrancando con mayuscula."""
+    bajo = texto.lstrip().lower()
+    for frase in MULETILLAS_APERTURA:
+        if bajo.startswith(frase):
+            resto = texto.lstrip()[len(frase):].lstrip()
+            return resto[:1].upper() + resto[1:] if resto else texto
+    return texto
+
+
 def comprobar_limites(u: dict, nombre: str):
     tope_dia = int(CFG.get("LIMITE_MENSAJES_DIA") or 100)
     tope_min = int(CFG.get("LIMITE_MENSAJES_MINUTO") or 10)
@@ -728,10 +746,19 @@ async def chat(req: Request, body: dict = Body(...)):
         entrada = salida = 0
         costo = 0.0
         modelo_usado = ""
+        buffer = ""
+        emitido = False
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
                 if "t" in ev:
-                    yield "data: " + json.dumps({"t": ev["t"]}) + "\n\n"
+                    if emitido:
+                        yield "data: " + json.dumps({"t": ev["t"]}) + "\n\n"
+                    else:
+                        buffer += ev["t"]
+                        if len(buffer) >= 48:
+                            yield "data: " + json.dumps({"t": sin_muletilla(buffer)}) + "\n\n"
+                            buffer = ""
+                            emitido = True
                 elif "backend" in ev:
                     modelo_usado = ev.get("modelo", "")
                     yield "data: " + json.dumps({"modelo": ev.get("modelo"), "backend": ev.get("backend")}) + "\n\n"
@@ -744,6 +771,9 @@ async def chat(req: Request, body: dict = Body(...)):
                 elif "error" in ev:
                     amable = MENSAJES_AMABLES.get(ev.get("codigo"), "Hubo un problema con el modelo. Intenta otra vez.")
                     yield "data: " + json.dumps({"error": amable, "detalle": ev["error"]}) + "\n\n"
+            if buffer:
+                yield "data: " + json.dumps({"t": sin_muletilla(buffer)}) + "\n\n"
+                buffer = ""
             yield "data: " + json.dumps({"fin": True, "modelo": modelo_usado}) + "\n\n"
         except llm.ErrorModelo as e:
             amable = MENSAJES_AMABLES.get(e.codigo, "Hubo un problema con el modelo. Intenta otra vez.")
