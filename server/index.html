@@ -43,6 +43,12 @@
   .barra i{display:block;height:100%;background:var(--fg)}
   .fila{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:8px}
   .mini{border:1px solid var(--line);border-radius:99px;padding:5px 11px;font-size:11.5px;text-decoration:none;color:var(--fg2)}
+  #salir{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;padding:11px 12px;margin-bottom:9px;
+    border:1px solid #5a2a2e;border-radius:12px;background:rgba(255,90,90,.09);color:#ff5a5a;
+    font-size:15px;font-weight:700;letter-spacing:.02em;text-decoration:none;transition:.15s}
+  #salir svg{width:21px;height:21px;flex:0 0 21px}
+  #salir:hover{border-color:#ff5a5a;background:rgba(255,90,90,.18)}
+  @media (max-width:860px){ #salir{font-size:15.5px;padding:12px} }
   .mini:hover{border-color:var(--fg);color:var(--fg)}
   .quien{color:var(--fg);font-weight:600}
 
@@ -143,8 +149,9 @@
       <div style="margin-top:6px">mensajes de hoy</div>
       <div class="barra"><i id="barraUso" style="width:0%"></i></div>
       <div id="cuota">— de —</div>
-      <div class="fila"><a class="mini" href="/logout">Salir</a><a class="mini" id="btnPanel" href="/panel" style="display:none">Panel</a></div>
-      <div class="fila"><button class="mini" id="compartir">copiar enlace</button><span class="etiqueta" id="modeloLado">—</span></div>
+      <a id="salir" href="/logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3.5H7.5A3.5 3.5 0 0 0 4 7v10a3.5 3.5 0 0 0 3.5 3.5h6"/><path d="M9.5 12h10"/><path d="M16.5 8.2 20.3 12l-3.8 3.8"/></svg>Salir</a>
+      <div class="fila"><a class="mini" id="btnPanel" href="/panel" style="display:none">Panel</a><button class="mini" id="compartir">copiar enlace</button></div>
+      <div class="fila"><span class="etiqueta" id="modeloLado">—</span></div>
     </div>
   </aside>
   <div id="cortina"></div>
