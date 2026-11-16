@@ -14,13 +14,25 @@ modelo responder: OpenRouter en la nube y, si falla, el modelo local calibrado e
 Autostart: tres accesos en la carpeta Inicio (`Eros Modelo.vbs`, `Eros Web.vbs`, `Eros Tunel.vbs`).
 La URL pública del túnel se imprime al arrancar, queda en `url_publica.txt`, en `/api/estado` y en el panel.
 
-## Agregar un alumno
+## Panel secreto del profe y creación de alumnos
 
-1. Abrir `.env` y sumar a `ALUMNOS` el par nombre:codigo separado por coma:
+El panel vive en `/panel` y está protegido por `ADMIN_CLAVE` (cookie aparte de la de los alumnos):
+los alumnos que entren a `/panel` ven la pantalla de clave y no pueden tocar nada.
 
-       ALUMNOS=profe:eros2026,ana:ana-clave,luis:luis-clave
+Desde el panel, con un botón:
 
-2. Reiniciar la web: `scripts\start-web.ps1`. El alumno entra en la web con ese nombre y ese código.
+- **Crear alumno**: nombre o alias + código aleatorio de 6 caracteres.
+- **Crear 10 de golpe**: por si arrancás con un grupo completo (genera alumno01..alumno10).
+- **rotar código**: cambia el código de ese alumno. El viejo muere al instante, así el que lo filtró
+  no entra más y el alumno vuelve a entrar con el código nuevo que le pases.
+- **borrar**: lo saca del sistema. Si quiere volver, se le crea un código nuevo.
+- **copiar invitación**: copia el mensaje listo (enlace + nombre + código) para pegar en el grupo.
+- **Copiar todos los códigos**: el listado completo de una vez.
+
+Los códigos se guardan en `.env` (línea `ALUMNOS=`) y aplican al instante, sin reiniciar la web.
+También se puede hacer por consola: `python scripts\alumno.py ana` (crea), `--lista`, `--borrar ana`.
+
+Si cambiás la clave del panel, editá `ADMIN_CLAVE` en el `.env` y reiniciá la web.
 
 ## Variables del .env
 

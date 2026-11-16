@@ -16,6 +16,10 @@
 Arranque automatico: "LocalAI DeepSeek9B.vbs", "LocalAI Web.vbs" y "LocalAI Tunel.vbs" en la carpeta Inicio.
 La URL publica cambia si reinicias el tunel; se lee en el panel, en /api/estado y en logs\tunnel.log.
 
+## Panel secreto
+El panel de admin es /panel y pide ADMIN_CLAVE (esta en .env). Desde ahi: crear alumnos, crear 10 de golpe,
+rotar codigo, borrar y copiar invitaciones. Los alumnos no ven ese panel aunque entren a la direccion.
+
 ## Reglas de la prueba (web\config.json, luego reiniciar la web)
 - limite_diario_por_ip: 20 peticiones por persona y por dia (se reinician a medianoche).
 - tope_global_diario: 400 por dia en total.

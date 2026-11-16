@@ -12,6 +12,7 @@ import hmac
 import json
 import os
 import pathlib
+import secrets
 import sys
 import time
 
@@ -57,6 +58,7 @@ def cargar_env() -> dict:
 CFG = cargar_env()
 SECRETO = (CFG.get("SESSION_SECRET") or "eros-secreto").encode()
 COOKIE = "eros_sesion"
+COOKIE_ADMIN = "eros_admin"
 
 app = FastAPI(title="Eros")
 
@@ -67,16 +69,60 @@ MENSAJES_AMABLES = {
 }
 
 
+def codigo_random(largo: int = 6) -> str:
+    abc = "abcdefghijkmnpqrstuvwxyz23456789"
+    return "".join(secrets.choice(abc) for _ in range(largo))
+
+
+def archivo_alumnos() -> pathlib.Path:
+    return RAIZ / ".env"
+
+
 def alumnos() -> dict:
-    """nombre -> codigo"""
+    """nombre -> codigo. Se lee del .env en cada llamada, asi los cambios aplican al instante."""
     d = {}
-    for par in (CFG.get("ALUMNOS") or "").split(","):
+    archivo = archivo_alumnos()
+    crudo = ""
+    if archivo.exists():
+        for linea in archivo.read_text(encoding="utf-8-sig").splitlines():
+            if linea.strip().startswith("ALUMNOS="):
+                crudo = linea.split("=", 1)[1].strip()
+                break
+    if os.environ.get("ALUMNOS"):
+        crudo = os.environ["ALUMNOS"]
+    for par in crudo.split(","):
         par = par.strip()
-        if not par or ":" not in par:
-            continue
-        nombre, codigo = par.split(":", 1)
-        d[nombre.strip()] = codigo.strip()
+        if par and ":" in par:
+            nombre, codigo = par.split(":", 1)
+            d[nombre.strip()] = codigo.strip()
     return d
+
+
+def guardar_alumnos(tabla: dict) -> None:
+    linea_nueva = "ALUMNOS=" + ",".join(n + ":" + c for n, c in tabla.items())
+    archivo = archivo_alumnos()
+    if not archivo.exists():
+        archivo.write_text(linea_nueva + "\n", encoding="utf-8")
+        return
+    lineas = archivo.read_text(encoding="utf-8").splitlines()
+    salida, visto = [], False
+    for l in lineas:
+        if l.strip().startswith("ALUMNOS="):
+            salida.append(linea_nueva)
+            visto = True
+        else:
+            salida.append(l)
+    if not visto:
+        salida.append(linea_nueva)
+    archivo.write_text("\n".join(salida) + "\n", encoding="utf-8")
+
+
+def firmar_admin() -> str:
+    return hmac.new(SECRETO, b"admin", hashlib.sha256).hexdigest()[:32]
+
+
+def es_admin(req: Request) -> bool:
+    return hmac.compare_digest(req.cookies.get(COOKIE_ADMIN) or "", firmar_admin())
 
 
 def firmar(nombre: str) -> str:
@@ -238,9 +284,129 @@ def index(req: Request):
 
 @app.get("/panel", response_class=HTMLResponse)
 def panel(req: Request):
-    if not sesion(req):
-        return RedirectResponse("/login", status_code=303)
+    if not es_admin(req):
+        return RedirectResponse("/admin", status_code=303)
     return (RAIZ / "server" / "panel.html").read_text(encoding="utf-8")
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def vista_admin(req: Request):
+    if es_admin(req):
+        return RedirectResponse("/panel", status_code=303)
+    return (RAIZ / "server" / "admin.html").read_text(encoding="utf-8")
+
+
+@app.post("/admin/entrar")
+async def admin_entrar(req: Request):
+    datos = parse_qs((await req.body()).decode("utf-8", "ignore"))
+    clave = (datos.get("clave") or [""])[0].strip()
+    if clave != (CFG.get("ADMIN_CLAVE") or ""):
+        return RedirectResponse("/admin?error=1", status_code=303)
+    r = RedirectResponse("/panel", status_code=303)
+    r.set_cookie(COOKIE_ADMIN, firmar_admin(), httponly=True, samesite="lax", max_age=60 * 60 * 24 * 90)
+    return r
+
+
+@app.get("/admin/salir")
+def admin_salir():
+    r = RedirectResponse("/admin", status_code=303)
+    r.delete_cookie(COOKIE_ADMIN)
+    return r
+
+
+def solo_admin(req: Request) -> None:
+    if not es_admin(req):
+        raise HTTPException(401, "panel de admin")
+
+
+@app.get("/api/admin/alumnos")
+def admin_alumnos(req: Request):
+    solo_admin(req)
+    tabla = alumnos()
+    u = leer_uso()
+    filas = []
+    for nombre, codigo in tabla.items():
+        reg = u["alumnos"].get(nombre, {})
+        filas.append({"nombre": nombre, "codigo": codigo, "mensajes": reg.get("mensajes", 0),
+                      "tokens": reg.get("tokens", 0), "costo": reg.get("costo", 0.0),
+                      "ultima": reg.get("ultima", "")})
+    return {"alumnos": filas, "enlace": url_publica(), "activos_15min": activos_15min()}
+
+
+def activos_15min() -> int:
+    u = leer_uso()
+    ahora = datetime.datetime.now()
+    n = 0
+    for v in u["alumnos"].values():
+        try:
+            if (ahora - datetime.datetime.strptime(v.get("ultima", ""), "%Y-%m-%d %H:%M:%S")).total_seconds() < 900:
+                n += 1
+        except Exception:
+            pass
+    return n
+
+
+@app.post("/api/admin/alumno")
+async def admin_crear(req: Request, body: dict = Body(...)):
+    solo_admin(req)
+    nombre = str(body.get("nombre") or "").strip()
+    if not nombre:
+        raise HTTPException(400, "falta el nombre")
+    tabla = alumnos()
+    if nombre.lower() in [n.lower() for n in tabla]:
+        raise HTTPException(400, "ese nombre ya existe")
+    tabla[nombre] = str(body.get("codigo") or "").strip() or codigo_random()
+    guardar_alumnos(tabla)
+    return {"nombre": nombre, "codigo": tabla[nombre], "enlace": url_publica()}
+
+
+@app.post("/api/admin/lote")
+async def admin_lote(req: Request, body: dict = Body(...)):
+    """Crea N alumnos de golpe: alumno01..NN con codigos random."""
+    solo_admin(req)
+    cuantos = max(1, min(int(body.get("cuantos") or 10), 200))
+    prefijo = str(body.get("prefijo") or "alumno").strip() or "alumno"
+    tabla = alumnos()
+    creados = []
+    i = 1
+    while len(creados) < cuantos:
+        nombre = prefijo + str(i).zfill(2)
+        i += 1
+        if nombre.lower() in [n.lower() for n in tabla]:
+            continue
+        tabla[nombre] = codigo_random()
+        creados.append({"nombre": nombre, "codigo": tabla[nombre]})
+    guardar_alumnos(tabla)
+    return {"creados": creados, "enlace": url_publica()}
+
+
+@app.post("/api/admin/rotar")
+async def admin_rotar(req: Request, body: dict = Body(...)):
+    solo_admin(req)
+    nombre = str(body.get("nombre") or "").strip()
+    tabla = alumnos()
+    real = next((n for n in tabla if n.lower() == nombre.lower()), None)
+    if not real:
+        raise HTTPException(404, "no existe ese alumno")
+    tabla[real] = codigo_random()
+    guardar_alumnos(tabla)
+    return {"nombre": real, "codigo": tabla[real], "enlace": url_publica()}
+
+
+@app.post("/api/admin/borrar")
+async def admin_borrar(req: Request, body: dict = Body(...)):
+    solo_admin(req)
+    nombre = str(body.get("nombre") or "").strip().lower()
+    tabla = alumnos()
+    real = next((n for n in tabla if n.lower() == nombre), None)
+    if not real:
+        raise HTTPException(404, "no existe ese alumno")
+    tabla.pop(real)
+    guardar_alumnos(tabla)
+    u = leer_uso()
+    u["alumnos"].pop(real, None)
+    guardar_uso(u)
+    return {"borrado": real}
 
 
 # ---------------------------------------------------------------- api
@@ -274,8 +440,7 @@ def estado(req: Request):
 
 @app.get("/api/uso")
 def uso(req: Request):
-    if not sesion(req):
-        raise HTTPException(401, "sin sesion")
+    solo_admin(req)
     u = leer_uso()
     ahora = datetime.datetime.now()
 

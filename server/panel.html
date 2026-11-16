@@ -3,67 +3,137 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Panel · Eros</title>
+<title>Panel secreto · Eros</title>
 <style>
   :root{ --bg:#0b0b0c; --fg:#f2f2f3; --fg2:#9b9ba1; --line:#232326; --soft:#141416;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 var(--sans);padding:26px 18px 70px}
-  .col{max-width:940px;margin:0 auto}
-  h1{font-size:19px;margin:0 0 4px}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 var(--sans);padding:24px 16px 70px}
+  .col{max-width:1000px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px;display:flex;align-items:center;gap:9px}
+  h1 .sello{width:22px;height:22px;border-radius:7px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-size:12px;font-weight:700}
   h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--fg2);margin:26px 0 8px;font-weight:600}
   .nota{color:var(--fg2);font-size:12px}
   a{color:var(--fg)}
-  .tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:18px}
-  .t{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--soft)}
-  .t .k{font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:.08em}
-  .t .v{font-size:22px;font-weight:600;margin-top:4px}
+  .tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:16px}
+  .t{border:1px solid var(--line);border-radius:14px;padding:13px;background:var(--soft)}
+  .t .k{font-size:10.5px;color:var(--fg2);text-transform:uppercase;letter-spacing:.08em}
+  .t .v{font-size:21px;font-weight:600;margin-top:4px}
   table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden}
-  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px;vertical-align:middle}
   tr:last-child td{border-bottom:0}
-  th{background:var(--soft);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg2)}
-  .mono{font-family:var(--mono);font-size:12px}
+  th{background:var(--soft);font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg2);font-weight:600}
+  code{font-family:var(--mono);font-size:13px;letter-spacing:.06em;background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:2px 7px}
+  button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:9px;padding:5px 10px;font:12px var(--sans);cursor:pointer}
+  button:hover{border-color:var(--fg)}
+  button.principal{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+  .acciones{display:flex;gap:6px;flex-wrap:wrap}
+  .alta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px}
+  input{padding:9px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font:13px var(--sans);outline:none}
+  input:focus{border-color:var(--fg)}
+  .ok{border:1px solid var(--line);border-left:3px solid #7ddc8b;border-radius:10px;padding:8px 11px;margin-top:10px;font-size:12.5px;display:none;white-space:pre-wrap}
+  .mono{font-family:var(--mono)}
 </style>
 </head>
 <body>
 <div class="col">
-  <h1>Panel de uso · Eros</h1>
-  <div class="nota">Se refresca solo cada 10 s · <a href="/">volver al chat</a> · <a href="/api/uso" target="_blank">json</a> · <a href="/logout">salir</a></div>
+  <h1><span class="sello">E</span> Panel secreto de Eros</h1>
+  <div class="nota">Solo el profe entra acá · <a href="/">ir al chat</a> · <a href="/admin/salir">salir</a> · se refresca cada 10 s</div>
 
   <div class="tarjetas" id="tarjetas"></div>
 
-  <h2>consumo por alumno (hoy)</h2>
-  <table><thead><tr><th>alumno</th><th>estado</th><th>mensajes</th><th>tokens</th><th>costo</th><th>primera</th><th>última</th></tr></thead>
-  <tbody id="alumnos"></tbody></table>
+  <h2>invitaciones de alumnos</h2>
+  <div class="alta">
+    <input id="nuevoNombre" placeholder="nombre o alias del alumno" size="28">
+    <button class="principal" id="crear">Crear alumno</button>
+    <span class="nota">o</span>
+    <button id="lote">Crear 10 de golpe</button>
+    <button id="copiarTodo">Copiar todos los códigos</button>
+  </div>
+  <div class="ok" id="ok"></div>
+  <table style="margin-top:12px">
+    <thead><tr><th>alumno</th><th>código de invitación</th><th>estado</th><th>msj hoy</th><th>tokens</th><th>acciones</th></tr></thead>
+    <tbody id="alumnos"></tbody>
+  </table>
+
+  <h2>consumo del día</h2>
+  <table><thead><tr><th>alumno</th><th>mensajes</th><th>tokens</th><th>costo</th><th>última</th></tr></thead><tbody id="uso"></tbody></table>
 
   <h2>últimas peticiones</h2>
   <table><thead><tr><th>hora</th><th>alumno</th><th>entrada</th><th>salida</th><th>costo</th></tr></thead><tbody id="ultimas"></tbody></table>
 
   <h2>notas</h2>
-  <div class="nota" id="notas"></div>
+  <div class="nota">
+    Los códigos se guardan en <span class="mono">.env</span> y aplican al instante, sin reiniciar nada.
+    Si un código se filtró, dale <b>rotar</b>: el alumno entra de nuevo con el código nuevo y el viejo muere.
+    <b>Borrar</b> lo saca del todo y puede volver con un código nuevo cuando quieras.
+  </div>
 </div>
 <script>
 const $ = s => document.querySelector(s);
 const num = n => (n || 0).toLocaleString('es');
-async function pintar(){
-  let d;
-  try { d = await (await fetch('/api/uso')).json(); } catch(e){ $('#notas').textContent = 'sin conexión con el gateway'; return; }
-  $('#tarjetas').innerHTML = [
-    ['en línea / activos (15 min)', d.activos_15min || 0],
-    ['alumnos configurados', d.configurados || 0],
-    ['mensajes hoy', num(d.total_mensajes)],
-    ['tokens hoy', num(d.total_tokens)],
-    ['costo hoy', 'US$ ' + (d.costo_total || 0).toFixed(4)],
-    ['modelo', d.motor || d.modelo || '-']
-  ].map(([k,v]) => '<div class="t"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>').join('');
-  $('#alumnos').innerHTML = (d.alumnos && d.alumnos.length)
-    ? d.alumnos.map(a => '<tr><td>'+a.nombre+'</td><td>'+(a.estado||'-')+'</td><td>'+num(a.mensajes)+'</td><td class="mono">'+num(a.tokens)+'</td><td class="mono">US$ '+(a.costo||0).toFixed(4)+'</td><td class="mono">'+(a.primera||'-')+'</td><td class="mono">'+(a.ultima||'-')+'</td></tr>').join('')
-    : '<tr><td colspan="7">todavía nadie usó Eros hoy</td></tr>';
-  $('#ultimas').innerHTML = (d.ultimas && d.ultimas.length)
-    ? d.ultimas.map(u => '<tr><td class="mono">'+u.hora+'</td><td>'+u.alumno+'</td><td class="mono">'+num(u.entrada)+'</td><td class="mono">'+num(u.salida)+'</td><td class="mono">US$ '+(u.costo||0).toFixed(5)+'</td></tr>').join('')
-    : '<tr><td colspan="5">sin registros</td></tr>';
-  $('#notas').innerHTML = 'Día contabilizado: ' + d.fecha + '. Los límites por alumno y el modelo activo se cambian en <span class="mono">.env</span> y se aplican al reiniciar la web. La API key nunca se muestra: vive solo en el servidor.';
+function decir(t, ms = 6000){ const o = $('#ok'); o.textContent = t; o.style.display = 'block'; clearTimeout(o._t); o._t = setTimeout(() => o.style.display = 'none', ms); }
+async function api(ruta, cuerpo){
+  const r = await fetch(ruta, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo || {}) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { decir('error: ' + (j.detail || r.status)); return null; }
+  return j;
 }
+async function pintar(){
+  let d, u;
+  try { d = await (await fetch('/api/admin/alumnos')).json(); u = await (await fetch('/api/uso')).json(); }
+  catch(e){ $('#tarjetas').innerHTML = '<div class="t">sin conexión con el gateway</div>'; return; }
+  $('#tarjetas').innerHTML = [
+    ['en línea / activos 15 min', d.activos_15min || 0],
+    ['alumnos con acceso', (d.alumnos || []).length],
+    ['mensajes hoy', num(u.total_mensajes)],
+    ['tokens hoy', num(u.total_tokens)],
+    ['costo hoy', 'US$ ' + (u.costo_total || 0).toFixed(4)],
+    ['modelo', u.motor || u.modelo || '-']
+  ].map(([k, v]) => '<div class="t"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>').join('');
+  $('#alumnos').innerHTML = (d.alumnos || []).length ? d.alumnos.map(a =>
+    '<tr><td>' + a.nombre + '</td><td><code>' + a.codigo + '</code></td><td>' + (a.ultima ? 'última vez ' + a.ultima.slice(11) : 'sin usar') + '</td>' +
+    '<td>' + num(a.mensajes) + '</td><td class="mono">' + num(a.tokens) + '</td>' +
+    '<td><div class="acciones"><button data-rotar="' + a.nombre + '">rotar código</button>' +
+    '<button data-borrar="' + a.nombre + '">borrar</button>' +
+    '<button data-copiar="' + a.nombre + '">copiar invitación</button></div></td></tr>').join('')
+    : '<tr><td colspan="6">todavía no creaste alumnos</td></tr>';
+  $('#uso').innerHTML = (u.alumnos || []).length ? u.alumnos.map(a =>
+    '<tr><td>' + a.nombre + '</td><td>' + num(a.mensajes) + '</td><td class="mono">' + num(a.tokens) + '</td><td class="mono">US$ ' + (a.costo || 0).toFixed(4) + '</td><td class="mono">' + (a.ultima || '-') + '</td></tr>').join('')
+    : '<tr><td colspan="5">sin datos todavía</td></tr>';
+  $('#ultimas').innerHTML = (u.ultimas || []).length ? u.ultimas.map(x =>
+    '<tr><td class="mono">' + x.hora + '</td><td>' + x.alumno + '</td><td class="mono">' + num(x.entrada) + '</td><td class="mono">' + num(x.salida) + '</td><td class="mono">US$ ' + (x.costo || 0).toFixed(5) + '</td></tr>').join('')
+    : '<tr><td colspan="5">sin registros</td></tr>';
+}
+$('#crear').onclick = async () => {
+  const nombre = $('#nuevoNombre').value.trim();
+  if (!nombre) return decir('escribí un nombre');
+  const j = await api('/api/admin/alumno', { nombre });
+  if (j) { $('#nuevoNombre').value = ''; decir('creado ' + j.nombre + ' con código ' + j.codigo + '\n' + j.enlace + '  (nombre ' + j.nombre + ', código ' + j.codigo + ')'); pintar(); }
+};
+$('#lote').onclick = async () => {
+  const j = await api('/api/admin/lote', { cuantos: 10 });
+  if (j) { decir('creados ' + j.creados.length + ' alumnos:\n' + j.creados.map(a => a.nombre + '  ' + a.codigo).join('\n') + '\nenlace: ' + j.enlace); pintar(); }
+};
+$('#copiarTodo').onclick = async () => {
+  const d = await (await fetch('/api/admin/alumnos')).json();
+  const texto = 'Eros — asistente del curso\n' + d.enlace + '\n\n' + d.alumnos.map(a => a.nombre + '  →  ' + a.codigo).join('\n');
+  await navigator.clipboard.writeText(texto); decir('copiado:\n' + texto);
+};
+document.addEventListener('click', async e => {
+  const r = e.target.closest('[data-rotar]');
+  if (r) { const j = await api('/api/admin/rotar', { nombre: r.dataset.rotar }); if (j) { decir('código nuevo de ' + j.nombre + ': ' + j.codigo); pintar(); } }
+  const b = e.target.closest('[data-borrar]');
+  if (b) { if (confirm('¿Borrar a ' + b.dataset.borrar + '?')) { const j = await api('/api/admin/borrar', { nombre: b.dataset.borrar }); if (j) { decir('borrado ' + j.borrado); pintar(); } } }
+  const c = e.target.closest('[data-copiar]');
+  if (c) {
+    const d = await (await fetch('/api/admin/alumnos')).json();
+    const a = (d.alumnos || []).find(x => x.nombre === c.dataset.copiar);
+    if (a) { const t = 'Eros, el asistente del curso: ' + d.enlace + '\nEntra con tu nombre (' + a.nombre + ') y este código: ' + a.codigo;
+      await navigator.clipboard.writeText(t); decir('copiado:\n' + t); }
+  }
+});
+$('#nuevoNombre').addEventListener('keydown', e => { if (e.key === 'Enter') $('#crear').click(); });
 pintar(); setInterval(pintar, 10000);
 </script>
 </body>
