@@ -4,6 +4,7 @@ import pathlib
 import sys
 import time
 import urllib.parse
+import urllib.error
 import urllib.request
 
 BASE = "http://127.0.0.1:8090"
@@ -37,7 +38,10 @@ def preguntar(op, texto):
                                                   "max_tokens": 1200}).encode(),
                                  headers={"Content-Type": "application/json"})
     t0 = time.time()
-    crudo = op.open(req, timeout=300).read().decode("utf-8", "ignore")
+    try:
+        crudo = op.open(req, timeout=300).read().decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        return 0, "LIMITE: " + e.read().decode("utf-8", "ignore")[:120]
     salida = ""
     for l in crudo.split("\n\n"):
         if l.startswith("data: "):
