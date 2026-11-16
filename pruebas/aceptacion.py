@@ -94,13 +94,21 @@ def main():
     exitos.append(ok("se contó el mensaje", est2.get("usados_hoy", 0) >= 1, est2.get("usados_hoy")))
     exitos.append(ok("quedan menos mensajes", est2.get("restantes_hoy", 99) < 100, est2.get("restantes_hoy")))
 
-    print("6) uso registrado y panel")
-    status, cuerpo, _ = c.pedir("/api/uso")
+    print("6) uso registrado y panel (con sesion de admin)")
+    admin = Cookie()
+    clave_admin = ""
+    for linea in (RAIZ / ".env").read_text(encoding="utf-8").splitlines():
+        if linea.startswith("ADMIN_CLAVE="):
+            clave_admin = linea.split("=", 1)[1].strip()
+    admin.pedir("/admin/entrar", {"clave": clave_admin})
+    status, cuerpo, _ = admin.pedir("/api/uso")
     uso = json.loads(cuerpo)
     exitos.append(ok("uso por alumno registrado", any(a["nombre"] == "profe" for a in uso.get("alumnos", []))))
     exitos.append(ok("tokens contados", uso.get("total_tokens", 0) > 0, uso.get("total_tokens")))
-    status, cuerpo, _ = c.pedir("/panel")
-    exitos.append(ok("panel responde", status == 200 and b"Panel de uso" in cuerpo))
+    status, cuerpo, _ = admin.pedir("/panel")
+    exitos.append(ok("panel secreto responde", status == 200 and "Panel secreto".encode() in cuerpo))
+    status, cuerpo, _ = c.pedir("/api/uso")
+    exitos.append(ok("alumno no entra a /api/uso", status == 401, status))
 
     print("7) la key no aparece en lo que sirve el servidor")
     for ruta in ("/", "/panel", "/login"):
