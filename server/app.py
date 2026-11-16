@@ -131,11 +131,13 @@ ARCHIVO_LLAVES = RAIZ / "datos" / "llaves.json"
 
 
 def leer_llaves() -> dict:
-    if ARCHIVO_LLAVES.exists():
+    for _ in range(3):
+        if not ARCHIVO_LLAVES.exists():
+            return {}
         try:
             return json.loads(ARCHIVO_LLAVES.read_text(encoding="utf-8"))
         except Exception:
-            return {}
+            time.sleep(0.05)
     return {}
 
 
@@ -360,6 +362,7 @@ def _entrar_como(nombre: str) -> RedirectResponse:
 def salir():
     r = RedirectResponse("/login", status_code=303)
     r.delete_cookie(COOKIE)
+    r.delete_cookie(COOKIE_ADMIN)
     return r
 
 
@@ -457,6 +460,18 @@ async def admin_borrar_llave(req: Request, body: dict = Body(...)):
         llaves.pop(codigo)
         guardar_llaves(llaves)
     return {"borrada": codigo}
+
+
+@app.post("/api/admin/llaves/limpiar")
+async def admin_limpiar_llaves(req: Request, body: dict = Body(...)):
+    """Borra todas las llaves libres (las usadas quedan)."""
+    solo_admin(req)
+    llaves = leer_llaves()
+    libres = [c for c, v in llaves.items() if v.get("alumno") is None]
+    for c in libres:
+        llaves.pop(c)
+    guardar_llaves(llaves)
+    return {"borradas": len(libres)}
 
 
 @app.get("/admin/salir")
@@ -587,6 +602,7 @@ def estado(req: Request):
     return {
         "sesion": bool(nombre),
         "nombre": nombre,
+        "es_admin": es_admin(req),
         "modelo_visible": modelo["visible"],
         "motor": modelo.get("motor_visible") or modelo["visible"],
         "backend": CFG.get("BACKEND") or "openrouter",

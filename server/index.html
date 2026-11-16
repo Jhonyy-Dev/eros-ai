@@ -26,7 +26,7 @@
   /* lateral */
   #lado{width:268px;flex:0 0 268px;background:var(--soft2);border-right:1px solid var(--line);display:flex;flex-direction:column}
   .marca{display:flex;align-items:center;gap:10px;padding:16px 16px 12px}
-  .logo{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid var(--line);background:#000;flex:0 0 36px}
+  .logo{width:38px;height:38px;border-radius:50%;object-fit:contain;background:#000;border:1px solid var(--line);flex:0 0 38px;max-width:100%}
   .marca b{display:block;line-height:1.2}
   .marca small{color:var(--fg2);font-size:11.5px}
   .nuevo{margin:6px 12px 10px;padding:11px 14px;border-radius:12px;background:var(--fg);color:var(--bg);font-weight:600;
@@ -63,7 +63,8 @@
   #irFinal:hover{border-color:var(--fg)}
   .col{max-width:800px;margin:0 auto}
   #inicio{margin:5vh auto 0;text-align:center;max-width:660px}
-  #inicio .globo{width:54px;height:54px;border-radius:16px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-size:25px;font-weight:700;margin:0 auto 16px}
+  #inicio .globo{width:clamp(74px,18vw,112px);height:clamp(74px,18vw,112px);border-radius:50%;overflow:hidden;border:1px solid var(--line);background:#000;margin:0 auto 16px}
+  #inicio .globo img{width:100%;height:100%;object-fit:contain;display:block}
   #inicio h1{font-size:30px;margin:0 0 8px;letter-spacing:-.02em}
   #inicio p{color:var(--fg2);font-size:14.5px;margin:0 auto 24px;max-width:44ch}
   .tarjetas{display:grid;grid-template-columns:1fr 1fr;gap:9px;text-align:left}
@@ -77,8 +78,8 @@
   .user{display:flex;justify-content:flex-end}
   .user .burbuja{background:#1c1c20;border:1px solid var(--line);border-radius:15px 15px 4px 15px;padding:10px 14px;max-width:78%;white-space:pre-wrap}
   .ia .cab{display:flex;align-items:center;gap:9px;margin-bottom:8px}
-  .ia .cab .av{width:29px;height:29px;border-radius:50%;overflow:hidden;border:1px solid var(--line);background:#000;flex:0 0 29px}
-  .ia .cab .av img{width:100%;height:100%;object-fit:cover;display:block}
+  .ia .cab .av{width:34px;height:34px;border-radius:50%;overflow:hidden;border:1px solid var(--line);background:#000;flex:0 0 34px}
+  .ia .cab .av img{width:100%;height:100%;object-fit:contain;display:block}
   .ia .cab .nom{font-size:13px;font-weight:600}
   .ia .cab .et{font-size:11.5px;color:var(--fg2)}
   .cuerpo{white-space:pre-wrap;word-wrap:break-word;font-size:15.5px}
@@ -142,8 +143,8 @@
       <div style="margin-top:6px">mensajes de hoy</div>
       <div class="barra"><i id="barraUso" style="width:0%"></i></div>
       <div id="cuota">— de —</div>
-      <div class="fila"><a class="mini" href="/panel">panel</a><a class="mini" href="/logout">salir</a></div>
-      <div class="fila"><button class="mini" id="compartir">copiar enlace</button><span class="mini" id="modeloLado" style="border-style:dashed">—</span></div>
+      <div class="fila"><a class="mini" href="/logout">Salir</a><a class="mini" id="btnPanel" href="/panel" style="display:none">Panel</a></div>
+      <div class="fila"><button class="mini" id="compartir">copiar enlace</button><span class="etiqueta" id="modeloLado">—</span></div>
     </div>
   </aside>
   <div id="cortina"></div>
@@ -244,6 +245,7 @@ function md(txt, liviano){
     return '<div class="caja"><div class="top"><span>' + cab + '</span><button class="copiar" data-c="' + encodeURIComponent(p.c) + '">copiar</button></div><pre><code>' + resaltar(p.c, p.l, liviano || p.abierto) + '</code></pre></div>';
   });
 }
+async function copiar(txt){ try { await navigator.clipboard.writeText(txt); return true; } catch(e){ return false; } }
 const guardar = () => localStorage.setItem('eros.convs', JSON.stringify(convs.slice(0, 40)));
 function conv(){ if (!actual){ actual = { id:'c'+Date.now(), titulo:'nueva conversación', fecha:Date.now(), mensajes:[] }; convs.unshift(actual); guardar(); pintarLista(); } return actual; }
 function pintarLista(){
@@ -307,6 +309,7 @@ async function estado(){
     modeloVisible = d.modelo_visible;
     $('#modelo').textContent = d.modelo_visible;
     $('#modeloLado').textContent = d.modelo_visible;
+    $('#btnPanel').style.display = d.es_admin ? 'grid' : 'none';
     $('#enviar').disabled = d.restantes_hoy <= 0 || enviando;
     if (d.respaldo_local && (d.backend === 'openrouter')) franja('');
     if (d.restantes_hoy <= 0) aviso('Llegaste a tus ' + d.limite_dia + ' mensajes de hoy. Se reinician a medianoche.', 9000);
@@ -398,7 +401,8 @@ $('#menu').onclick = () => { $('#lado').classList.add('abierto'); $('#cortina').
 $('#cortina').onclick = cerrarLado;
 $('#compartir').onclick = async () => {
   const t = URL_PAGINA ? URL_PAGINA : location.origin;
-  try { await navigator.clipboard.writeText(t); aviso('Enlace copiado: ' + t); } catch(e){ aviso(t, 9000); }
+  const ok = await copiar(t);
+  aviso(ok ? ('Enlace copiado: ' + t) : t, 9000);
 };
 $('#lista').addEventListener('click', e => {
   const b = e.target.closest('.item'); if (!b) return;
@@ -406,9 +410,9 @@ $('#lista').addEventListener('click', e => {
 });
 document.addEventListener('click', async e => {
   const c = e.target.closest('.copiar');
-  if (c){ await navigator.clipboard.writeText(decodeURIComponent(c.dataset.c)); c.textContent='copiado'; setTimeout(()=>c.textContent='copiar',1300); }
+  if (c){ await copiar(decodeURIComponent(c.dataset.c)); c.textContent='copiado'; setTimeout(()=>c.textContent='copiar',1300); }
   const ct = e.target.closest('.copiarTurno');
-  if (ct){ await navigator.clipboard.writeText(ct.closest('.turno').querySelector('.cuerpo').innerText); ct.textContent='copiado'; setTimeout(()=>ct.textContent='copiar',1300); }
+  if (ct){ await copiar(ct.closest('.turno').querySelector('.cuerpo').innerText); ct.textContent='copiado'; setTimeout(()=>ct.textContent='copiar',1300); }
   const rg = e.target.closest('.regen');
   if (rg){ const t = rg.closest('.turno'); const textos = t.querySelector('.cuerpo').innerText; t.remove(); enviar(true); }
 });
