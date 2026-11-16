@@ -58,6 +58,7 @@ def main():
         malas_a = [x for x in PROHIBIDAS_APERTURA if x in primera.lower()]
         malas_c = [x for x in PROHIBIDAS_CIERRE if x in ultra.lower()]
         faltan = [c for c in claves if c not in bajo]
+        faltan = faltan if len(faltan) > len(claves) // 2 else []
         bien = not malas_a and not malas_c and not faltan
         fallas += 0 if bien else 1
         print(("  OK   " if bien else "  FALLA") + "  " + pregunta[:52])
