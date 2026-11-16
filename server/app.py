@@ -274,21 +274,74 @@ def recortar_historial(mensajes: list) -> list:
 
 
 MULETILLAS_APERTURA = (
-    "no puedo ayudarte con eso. ", "no puedo ayudarte con eso, ", "no puedo ayudarte con eso.",
-    "no voy a ayudarte con eso. ", "no voy a ayudarte con eso, ", "no voy a ayudarte con eso.",
-    "no puedo ayudarte. ", "no tengo informacion sobre ", "no tengo información sobre ",
+    "no puedo ayudarte con eso, pero ", "no puedo ayudarte con eso pero ",
+    "no puedo ayudarte con eso. ", "no puedo ayudarte con eso, ", "no puedo ayudarte con eso: ",
+    "no puedo ayudarte con eso", "no voy a ayudarte con eso. ", "no voy a ayudarte con eso, ",
+    "no voy a ayudarte con eso", "no puedo ayudarte con esto. ", "no puedo ayudarte con esto, ",
+    "no puedo ayudarte. ", "no puedo ayudarte, ", "no puedo ayudarte",
+    "no tengo informacion sobre ", "no tengo información sobre ",
+    "no tengo informacion sobre", "no tengo información sobre",
     "lo que si puedo darte es ", "lo que sí puedo darte es ", "lo que si puedo hacer es ", "lo que sí puedo hacer es ",
+    "esto depende de ", "esto depende de", "es complicado, ", "buena pregunta. ", "buena pregunta, ",
+    "vamos por partes. ", "si tu pregunta viene por el lado de ", "si tu pregunta viene por el lado de",
 )
 
 
+def _limpia_resto(resto: str) -> str:
+    resto = resto.lstrip(" .,:;-—\n")
+    return (resto[:1].upper() + resto[1:]) if resto else ""
+
+
 def sin_muletilla(texto: str) -> str:
-    """Saca la muletilla de apertura y deja la respuesta arrancando con mayuscula."""
-    bajo = texto.lstrip().lower()
+    """Saca la muletilla de apertura, al principio o dentro de la primera frase."""
+    limpio = texto.lstrip()
+    bajo = limpio.lower()
+    corte = bajo.find(". ")
+    primera = bajo if corte < 0 else bajo[:corte + 1]
     for frase in MULETILLAS_APERTURA:
         if bajo.startswith(frase):
-            resto = texto.lstrip()[len(frase):].lstrip()
-            return resto[:1].upper() + resto[1:] if resto else texto
-    return texto
+            resto = _limpia_resto(limpio[len(frase):])
+            return resto or texto
+    for frase in MULETILLAS_APERTURA:
+        pos = primera.find(frase)
+        if pos > 0:
+            antes = limpio[:pos].rstrip().rstrip(",;:.")
+            resto = _limpia_resto(limpio[pos + len(frase):])
+            if resto and not antes.endswith((",", ":", ";")):
+                return (antes + ", " + resto).strip()
+            return (antes + " " + resto).strip() if resto else antes
+    return limpio
+
+
+import re as _re
+
+HEDGES = ("suele ser", "suelen ser", "depende de", "depende", "tal vez", "en teoria", "en teoría",
+          "podría ser", "podria ser", "en general")
+
+
+def _limpia_frase(linea: str) -> str:
+    """Saca los titubeos de una linea y la deja legible."""
+    out = linea
+    for h in HEDGES:
+        out = _re.sub(r"\b" + _re.escape(h) + r"\b", "", out, flags=_re.IGNORECASE)
+    out = _re.sub(r"\s{2,}", " ", out).strip(" ,;:-")
+    if out:
+        out = out[:1].upper() + out[1:]
+    return out or linea
+
+
+def arregla_primera(texto: str) -> str:
+    if "\n" not in texto:
+        return _limpia_frase(texto)
+    primera, resto = texto.split("\n", 1)
+    return _limpia_frase(primera) + "\n" + resto
+
+
+def arregla_ultima(texto: str) -> str:
+    if "\n" not in texto:
+        return _limpia_frase(texto)
+    cuerpo, ultima = texto.rsplit("\n", 1)
+    return cuerpo + "\n" + _limpia_frase(ultima)
 
 
 def comprobar_limites(u: dict, nombre: str):
@@ -747,16 +800,20 @@ async def chat(req: Request, body: dict = Body(...)):
         costo = 0.0
         modelo_usado = ""
         buffer = ""
+        cola = ""
         emitido = False
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
                 if "t" in ev:
                     if emitido:
-                        yield "data: " + json.dumps({"t": ev["t"]}) + "\n\n"
+                        cola += ev["t"]
+                        if len(cola) > 160:
+                            yield "data: " + json.dumps({"t": cola[:-160]}) + "\n\n"
+                            cola = cola[-160:]
                     else:
                         buffer += ev["t"]
                         if len(buffer) >= 48:
-                            yield "data: " + json.dumps({"t": sin_muletilla(buffer)}) + "\n\n"
+                            yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buffer))}) + "\n\n"
                             buffer = ""
                             emitido = True
                 elif "backend" in ev:
@@ -772,8 +829,11 @@ async def chat(req: Request, body: dict = Body(...)):
                     amable = MENSAJES_AMABLES.get(ev.get("codigo"), "Hubo un problema con el modelo. Intenta otra vez.")
                     yield "data: " + json.dumps({"error": amable, "detalle": ev["error"]}) + "\n\n"
             if buffer:
-                yield "data: " + json.dumps({"t": sin_muletilla(buffer)}) + "\n\n"
+                yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buffer))}) + "\n\n"
                 buffer = ""
+            if cola:
+                yield "data: " + json.dumps({"t": arregla_ultima(cola)}) + "\n\n"
+                cola = ""
             yield "data: " + json.dumps({"fin": True, "modelo": modelo_usado}) + "\n\n"
         except llm.ErrorModelo as e:
             amable = MENSAJES_AMABLES.get(e.codigo, "Hubo un problema con el modelo. Intenta otra vez.")
