@@ -90,8 +90,8 @@ def main():
     exitos.append(ok("segundo corta por dia", s2 == 429 and "medianoche" in c2, (s2, c2[:90])))
 
     print("C) restauro los valores y reinicio")
-    set_env("LIMITE_MENSAJES_MINUTO", 10)
-    set_env("LIMITE_MENSAJES_DIA", 100)
+    set_env("LIMITE_MENSAJES_MINUTO", 5)
+    set_env("LIMITE_MENSAJES_DIA", 10)
     reiniciar_web()
     op = sesion()
     login(op)

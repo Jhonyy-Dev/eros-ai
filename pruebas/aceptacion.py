@@ -31,6 +31,13 @@ class Cookie:
             return e.code, e.read(), dict(e.headers)
 
 
+def limite_env(clave, por_defecto):
+    for linea in (RAIZ / ".env").read_text(encoding="utf-8").splitlines():
+        if linea.startswith(clave + "="):
+            return int(linea.split("=", 1)[1])
+    return por_defecto
+
+
 def ok(nombre, condicion, detalle=""):
     print(("  OK   " if condicion else "  FALLA") + "  " + nombre + (("  -> " + str(detalle)) if detalle else ""))
     return condicion
@@ -53,7 +60,7 @@ def main():
     est = json.loads(cuerpo)
     exitos.append(ok("sesion reconocida", est.get("sesion") is True and est.get("nombre") == "profe"))
     exitos.append(ok("modelo visible correcto", est.get("modelo_visible") == "Eros AI/Sin sensura", est.get("modelo_visible")))
-    exitos.append(ok("limites configurados", est.get("limite_dia") == 25 and est.get("limite_minuto") == 10,
+    exitos.append(ok("limites configurados", est.get("limite_dia") == limite_env("LIMITE_MENSAJES_DIA", 10) and est.get("limite_minuto") == limite_env("LIMITE_MENSAJES_MINUTO", 5),
                      (est.get("limite_dia"), est.get("limite_minuto"))))
 
     print("4) peticion real 'hola' en streaming")
