@@ -7,59 +7,176 @@
 <link rel="icon" href="/static/eros.jpg">
 <style>
   :root{ --bg:#0b0b0c; --fg:#f2f2f3; --fg2:#9b9ba1; --line:#232326; --soft:#141416;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif; }
+    --verde:#5ef08f; --verde2:rgba(94,240,143,.12);
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
   body{background:var(--bg);color:var(--fg);font:16px/1.6 var(--sans);display:grid;place-items:center;padding:24px}
-  .caja{width:100%;max-width:410px;border:1px solid var(--line);border-radius:18px;padding:26px;background:var(--soft)}
-  .logo{width:clamp(76px,28vw,104px);height:clamp(76px,28vw,104px);border-radius:50%;object-fit:contain;border:1px solid var(--line);
-    display:block;margin:0 auto 14px;background:#000}
-  h1{font-size:22px;margin:0 0 6px;letter-spacing:-.01em;text-align:center}
+  .caja{width:100%;max-width:420px;border:1px solid var(--line);border-radius:20px;padding:26px;background:var(--soft);
+    box-shadow:0 0 0 1px rgba(255,255,255,.02), 0 24px 60px rgba(0,0,0,.45)}
+  .logo{width:clamp(72px,26vw,96px);height:clamp(72px,26vw,96px);border-radius:50%;object-fit:contain;
+    border:1px solid var(--line);display:block;margin:0 auto 14px;background:#000}
+  h1{font-size:22px;margin:0 0 6px;text-align:center;letter-spacing:-.01em}
   p.sub{color:var(--fg2);font-size:13.5px;margin:0 0 22px;text-align:center}
-  label{display:block;font-size:12px;color:var(--fg2);margin:14px 0 6px}
-  input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);outline:none;font:inherit}
-  input:focus{border-color:var(--fg)}
-  input#codigo{letter-spacing:.12em}
-  .campo{position:relative}
-  .campo input{padding-right:64px}
-  #verCodigo{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:auto;margin:0;padding:6px 10px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--fg2);font:12px var(--sans);cursor:pointer}
-  #verCodigo:hover{color:var(--fg);border-color:var(--fg)}
-  button{width:100%;margin-top:20px;padding:13px;border:0;border-radius:12px;background:var(--fg);color:var(--bg);
+  label{display:block;font-size:12px;color:var(--fg2);margin:16px 0 6px}
+  input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);
+    color:var(--fg);outline:none;font:inherit}
+  input#nombre:focus{border-color:var(--fg)}
+
+  /* ---------- campo de clave tipo terminal ---------- */
+  .chip{display:flex;align-items:center;gap:7px;font:11px/1 var(--mono);letter-spacing:.14em;color:var(--verde);
+    text-transform:uppercase;margin-bottom:7px}
+  .chip::before{content:">";color:var(--verde);opacity:.7}
+  .chip .cursor{display:inline-block;width:7px;height:12px;background:var(--verde);animation:parp 1.05s steps(1) infinite}
+  @keyframes parp{50%{opacity:0}}
+
+  .clave{position:relative;border:1px solid #2a3a2f;border-radius:12px;background:#08110c;overflow:hidden;
+    transition:border-color .18s, box-shadow .18s}
+  .clave::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    background:repeating-linear-gradient(180deg, rgba(94,240,143,.05) 0 1px, transparent 1px 3px)}
+  .clave .scan{position:absolute;top:0;bottom:0;width:26%;z-index:3;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(94,240,143,.16),transparent);animation:barrido 2.6s linear infinite}
+  @keyframes barrido{from{transform:translateX(-120%)}to{transform:translateX(520%)}}
+  .clave.viva{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde2), 0 0 22px rgba(94,240,143,.18)}
+  .clave.bien{border-color:var(--verde);box-shadow:0 0 0 3px var(--verde2)}
+  .clave .visor{position:absolute;inset:0;z-index:2;display:flex;align-items:center;
+    padding:12px 62px 12px 14px;font:16px/1.2 var(--mono);letter-spacing:.18em;color:var(--verde);
+    white-space:pre;pointer-events:none;text-shadow:0 0 9px rgba(94,240,143,.34)}
+  .clave input{position:relative;z-index:2;background:transparent;color:transparent;caret-color:var(--verde);
+    border:0;border-radius:12px;padding:12px 62px 12px 14px;font:16px/1.2 var(--mono);letter-spacing:.18em}
+  .clave input::placeholder{color:transparent}
+  .clave input::selection{background:var(--verde);color:#04120a}
+  .ojo{position:absolute;right:8px;top:50%;transform:translateY(-50%);z-index:4;width:36px;height:36px;
+    display:grid;place-items:center;border:1px solid #2a3a2f;border-radius:10px;background:#0a140e;color:var(--verde);cursor:pointer}
+  .ojo:hover{border-color:var(--verde);background:#0f1d14}
+  .ojo svg{width:20px;height:20px}
+  .ojo .cerrado{display:none}
+  .ojo[aria-pressed="true"] .abierto{display:none}
+  .ojo[aria-pressed="true"] .cerrado{display:block}
+  .clave input:-webkit-autofill{-webkit-text-fill-color:transparent;box-shadow:0 0 0 40px #08110c inset;transition:none}
+  .visor.fantasma{opacity:.42}
+  .pista{font:11px/1.4 var(--mono);color:#4d6b57;margin-top:7px;letter-spacing:.06em;min-height:15px}
+  .pista b{color:var(--verde);font-weight:600}
+
+  button.enviar{width:100%;margin-top:20px;padding:13px;border:0;border-radius:12px;background:var(--fg);color:var(--bg);
     font:inherit;font-weight:600;cursor:pointer}
-  button:hover{opacity:.9}
-  .malo{border:1px solid var(--line);border-left:3px solid #ff5f5f;border-radius:10px;padding:9px 12px;font-size:13px;
+  button.enviar:hover{opacity:.9}
+  .malo{border:1px solid var(--line);border-left:3px solid #ff5a5a;border-radius:10px;padding:9px 12px;font-size:13px;
     color:var(--fg2);margin-bottom:6px;display:none}
   .pie{color:var(--fg2);font-size:11.5px;margin-top:16px;text-align:center}
 </style>
 </head>
 <body>
-  <form class="caja" method="post" action="/login">
+  <form class="caja" method="post" action="/login" id="forma">
     <img class="logo" src="/static/eros.jpg" alt="Eros">
     <h1>Eros</h1>
-    <p class="sub">Escribe tu nombre o alias y el clave de invitación que te dio el profe.</p>
+    <p class="sub">Escribe tu nombre o alias y la clave de invitación que te dio el profe.</p>
     <div class="malo" id="malo"></div>
+
     <label for="nombre">Tu nombre o alias</label>
     <input id="nombre" name="nombre" placeholder="ej: ana" autocomplete="username" autofocus required>
-    <label for="codigo">Clave de invitación</label>
-    <div class="campo">
-      <input id="codigo" name="codigo" type="password" placeholder="tu llave o tu clave" autocomplete="current-password" required>
-      <button type="button" id="verCodigo">ver</button>
+
+    <label class="chip" for="codigo">Clave de invitación <span class="cursor"></span></label>
+    <div class="clave" id="cajaClave">
+      <div class="scan" aria-hidden="true"></div>
+      <div class="visor" id="visor" aria-hidden="true"></div>
+      <input id="codigo" name="codigo" type="password" autocomplete="current-password" spellcheck="false"
+             autocapitalize="off" placeholder="k3m7pq" required>
+      <button type="button" class="ojo" id="verCodigo" aria-pressed="false" aria-label="mostrar u ocultar la clave" title="mostrar u ocultar">
+        <svg class="abierto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M2.2 12S5.8 5.6 12 5.6 21.8 12 21.8 12 18.2 18.4 12 18.4 2.2 12 2.2 12z"/><circle cx="12" cy="12" r="2.9"/>
+        </svg>
+        <svg class="cerrado" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 4.5 20.5 19.5"/><path d="M9.6 6.2A9.9 9.9 0 0 1 12 5.6c6.2 0 9.8 6.4 9.8 6.4a17 17 0 0 1-3.2 3.9"/>
+          <path d="M6.1 7.9A17 17 0 0 0 2.2 12s3.6 6.4 9.8 6.4a9.6 9.6 0 0 0 4-.8"/>
+        </svg>
+      </button>
     </div>
-    <button type="submit">Entrar</button>
+    <div class="pista" id="pista">clave oculta · tocá el ojo para verla</div>
+
+    <button class="enviar" type="submit">Entrar</button>
     <div class="pie">Si el alias está libre, queda registrado a tu nombre. El profe entra con su clave maestra.</div>
   </form>
+
 <script>
+  const visor = document.getElementById('visor');
+  const campo = document.getElementById('codigo');
+  const caja  = document.getElementById('cajaClave');
+  const ojo   = document.getElementById('verCodigo');
+  const pista = document.getElementById('pista');
+  const forma = document.getElementById('forma');
+  const ABC = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&@/\\|<>";
+  let visible = false;
+  let animando = false;
+  let temporizador = null;
+
+  const puntos = n => "●".repeat(n);
+
+  function textoActual(){
+    return campo.value;
+  }
+
+  function pintar(txt, fantasma){ visor.textContent = txt; visor.classList.toggle('fantasma', !!fantasma); }
+
+  function destino(){
+    const v = textoActual();
+    return visible ? v : puntos(v.length);
+  }
+
+  function descifrar(duracion){
+    const real = textoActual();
+    if (!real.length){ pintar(""); return; }
+    cancelAnimationFrame(animando);
+    const fin = destino();
+    const inicio = performance.now();
+    const paso = ahora => {
+      const p = Math.min(1, (ahora - inicio) / duracion);
+      let salida = "";
+      for (let i = 0; i < real.length; i++){
+        const umbral = i / (real.length + 2);
+        salida += (p > umbral + 0.25) ? fin[i] : ABC[Math.floor(Math.random() * ABC.length)];
+      }
+      pintar(salida);
+      if (p < 1){ animando = requestAnimationFrame(paso); }
+      else { pintar(fin); animando = false; actualizarPista(); }
+    };
+    animando = requestAnimationFrame(paso);
+  }
+
+  function actualizarPista(){
+    const n = campo.value.length;
+    if (!n){ pista.innerHTML = "clave oculta · tocá el ojo para verla"; return; }
+    pista.innerHTML = (visible ? "clave <b>a la vista</b>" : "clave <b>oculta</b>") + " · " + n + " caracteres · tocá el ojo para " + (visible ? "ocultarla" : "verla");
+  }
+
+  ojo.addEventListener('click', () => {
+    visible = !visible;
+    ojo.setAttribute('aria-pressed', String(visible));
+    descifrar(520);
+  });
+
+  campo.addEventListener('input', () => {
+    clearTimeout(temporizador);
+    if (!campo.value.length){ pintar("k3m7pq", true); actualizarPista(); return; }
+    descifrar(260);
+    temporizador = setTimeout(actualizarPista, 300);
+  });
+
+  campo.addEventListener('focus', () => caja.classList.add('viva'));
+  campo.addEventListener('blur',  () => caja.classList.remove('viva'));
+  forma.addEventListener('submit', () => { caja.classList.remove('viva'); caja.classList.add('bien'); });
+  window.addEventListener('load', () => { if (textoActual()) descifrar(700); else { pintar("k3m7pq", true); actualizarPista(); } });
+
   const mensajes = {
-    llave: 'Ese código no existe o ya fue usado. Pídele uno nuevo al profe.',
-    tomado: 'Ese alias ya está tomado. Usa otro o entra con el código de ese alias.',
-    otrollave: 'Ese alias existe y el código es de otra persona. Pide tu llave al profe, o entra con tu clave maestra si sos el admin.',
+    llave: 'Esa clave no existe o ya fue usada. Pídele una nueva al profe.',
+    tomado: 'Ese alias ya está tomado. Usa otro o entra con la clave de ese alias.',
+    otrollave: 'Ese alias existe y la clave es de otra persona. Pide tu clave al profe, o usa tu clave maestra si sos el admin.',
     falta: 'Completa los dos campos.',
-    '1': 'Nombre o código incorrecto.'
+    '1': 'Nombre o clave incorrectos.'
   };
-  const vc = document.querySelector('#verCodigo'), campo = document.querySelector('#codigo');
-  vc.onclick = () => { const oculto = campo.type === 'password'; campo.type = oculto ? 'text' : 'password'; vc.textContent = oculto ? 'ocultar' : 'ver'; campo.focus(); };
   const e = new URLSearchParams(location.search).get('error');
-  if (e) { const m = document.querySelector('#malo'); m.textContent = mensajes[e] || mensajes['1']; m.style.display = 'block'; }
+  if (e){ const m = document.getElementById('malo'); m.textContent = mensajes[e] || mensajes['1']; m.style.display = 'block'; }
 </script>
 </body>
 </html>
