@@ -100,7 +100,11 @@ def main():
     for linea in (RAIZ / ".env").read_text(encoding="utf-8").splitlines():
         if linea.startswith("ADMIN_CLAVE="):
             clave_admin = linea.split("=", 1)[1].strip()
-    admin.pedir("/admin/entrar", {"clave": clave_admin})
+    usuario_admin = ""
+    for linea in (RAIZ / ".env").read_text(encoding="utf-8").splitlines():
+        if linea.startswith("ADMIN_USER="):
+            usuario_admin = linea.split("=", 1)[1].strip()
+    admin.pedir("/admin/entrar", {"usuario": usuario_admin, "clave": clave_admin})
     status, cuerpo, _ = admin.pedir("/api/uso")
     uso = json.loads(cuerpo)
     exitos.append(ok("uso por alumno registrado", any(a["nombre"] == "profe" for a in uso.get("alumnos", []))))

@@ -10,11 +10,15 @@ BASE = "http://127.0.0.1:8090"
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 
 
-def clave_admin():
+def env_dato(clave, por_defecto=""):
     for l in (RAIZ / ".env").read_text(encoding="utf-8").splitlines():
-        if l.startswith("ADMIN_CLAVE="):
+        if l.startswith(clave + "="):
             return l.split("=", 1)[1].strip()
-    return ""
+    return por_defecto
+
+
+def clave_admin():
+    return env_dato("ADMIN_CLAVE")
 
 
 def sesion_alumno(nombre, codigo):
@@ -53,12 +57,12 @@ def main():
 
     print("2) login de admin")
     malo = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
-    malo.open(urllib.request.Request(BASE + "/admin/entrar", data=urllib.parse.urlencode({"clave": "mala"}).encode(),
+    malo.open(urllib.request.Request(BASE + "/admin/entrar", data=urllib.parse.urlencode({"usuario": env_dato("ADMIN_USER", "profe"), "clave": "mala"}).encode(),
                                      headers={"Content-Type": "application/x-www-form-urlencoded"}), timeout=20)
     ex.append(ok("clave mala no abre el panel", "rotar" not in cuerpo(malo, "/panel")))
 
     op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
-    op.open(urllib.request.Request(BASE + "/admin/entrar", data=urllib.parse.urlencode({"clave": clave_admin()}).encode(),
+    op.open(urllib.request.Request(BASE + "/admin/entrar", data=urllib.parse.urlencode({"usuario": env_dato("ADMIN_USER", "profe"), "clave": clave_admin()}).encode(),
                                    headers={"Content-Type": "application/x-www-form-urlencoded"}), timeout=20)
     texto = cuerpo(op, "/panel")
     ex.append(ok("clave correcta abre el panel", "Panel secreto de Eros" in texto and "rotar código" in texto))
@@ -89,10 +93,11 @@ def main():
 
     print("6) borrar alumno")
     admin_post("/api/admin/borrar", {"nombre": "sofia"})
-    ex.append(ok("borrado no entra", estado(sesion_alumno("sofia", j2["codigo"])).get("sesion") is False))
     linea = [l for l in (RAIZ / ".env").read_text(encoding="utf-8").splitlines() if l.startswith("ALUMNOS=")][0]
     ex.append(ok("no quedo en el .env", "sofia" not in linea, linea[:90]))
     ex.append(ok("el .env sigue bien formado", linea.count("=") == 1 and ":" in linea))
+    ex.append(ok("con su llave liberada puede volver a entrar", estado(sesion_alumno("sofia", j2["codigo"])).get("sesion") is True))
+    admin_post("/api/admin/borrar", {"nombre": "sofia"})
 
     print("7) lote de 10")
     lote = admin_post("/api/admin/lote", {"cuantos": 3, "prefijo": "prueba"})

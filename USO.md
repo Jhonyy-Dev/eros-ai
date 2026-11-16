@@ -16,6 +16,11 @@
 Arranque automatico: "LocalAI DeepSeek9B.vbs", "LocalAI Web.vbs" y "LocalAI Tunel.vbs" en la carpeta Inicio.
 La URL publica cambia si reinicias el tunel; se lee en el panel, en /api/estado y en logs\tunnel.log.
 
+## Llaves de invitacion
+Se generan desde el panel (1 o 10), son random y se pegan en el mensaje que copia el boton. El alumno se registra con su alias y la llave.
+El alias queda unico. Rotar genera una llave nueva y mata la vieja. Borrar libera la llave.
+Admin: usuario+clave (ADMIN_USER/ADMIN_CLAVE en .env), cambiable desde el panel, y /admin/a-chat para entrar al chat como admin.
+
 ## Panel secreto
 El panel de admin es /panel y pide ADMIN_CLAVE (esta en .env). Desde ahi: crear alumnos, crear 10 de golpe,
 rotar codigo, borrar y copiar invitaciones. Los alumnos no ven ese panel aunque entren a la direccion.

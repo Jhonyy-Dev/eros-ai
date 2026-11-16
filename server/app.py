@@ -19,7 +19,7 @@ import time
 import httpx
 import uvicorn
 from fastapi import Body, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse, FileResponse
 from urllib.parse import parse_qs
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
@@ -123,6 +123,60 @@ def firmar_admin() -> str:
 
 def es_admin(req: Request) -> bool:
     return hmac.compare_digest(req.cookies.get(COOKIE_ADMIN) or "", firmar_admin())
+
+
+# ---------------------------------------------------------------- llaves de invitacion
+
+ARCHIVO_LLAVES = RAIZ / "datos" / "llaves.json"
+
+
+def leer_llaves() -> dict:
+    if ARCHIVO_LLAVES.exists():
+        try:
+            return json.loads(ARCHIVO_LLAVES.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def guardar_llaves(d: dict) -> None:
+    ARCHIVO_LLAVES.parent.mkdir(parents=True, exist_ok=True)
+    tmp = ARCHIVO_LLAVES.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(ARCHIVO_LLAVES)
+
+
+def crear_llaves(cuantas: int) -> list:
+    llaves = leer_llaves()
+    nuevas = []
+    while len(nuevas) < cuantas:
+        codigo = codigo_random()
+        if codigo in llaves or codigo in alumnos().values():
+            continue
+        llaves[codigo] = {"alumno": None, "creada": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        nuevas.append(codigo)
+    guardar_llaves(llaves)
+    return nuevas
+
+
+def marcar_llave(codigo: str, alias) -> None:
+    llaves = leer_llaves()
+    if codigo in llaves:
+        llaves[codigo]["alumno"] = alias
+        guardar_llaves(llaves)
+
+
+def liberar_llave(codigo: str) -> None:
+    llaves = leer_llaves()
+    if codigo in llaves and llaves[codigo].get("alumno") is None:
+        pass
+    elif codigo in llaves:
+        llaves[codigo]["alumno"] = None
+        guardar_llaves(llaves)
+
+
+def llave_libre(codigo: str) -> bool:
+    return codigo in leer_llaves() and leer_llaves()[codigo].get("alumno") is None
 
 
 def firmar(nombre: str) -> str:
@@ -248,21 +302,56 @@ def vista_login():
     return (RAIZ / "server" / "login.html").read_text(encoding="utf-8")
 
 
+@app.get("/static/{nombre}")
+def estatico(nombre: str):
+    archivo = RAIZ / "server" / "static" / nombre
+    if not archivo.exists():
+        raise HTTPException(404, "no existe")
+    tipo = "image/jpeg" if nombre.lower().endswith((".jpg", ".jpeg")) else "image/png"
+    return FileResponse(archivo, media_type=tipo, headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.post("/login")
 async def entrar(req: Request):
     datos = parse_qs((await req.body()).decode("utf-8", "ignore"))
-    nombre = (datos.get("nombre") or [""])[0].strip()
+    alias = (datos.get("nombre") or [""])[0].strip()
     codigo = (datos.get("codigo") or [""])[0].strip()
+    if not alias or not codigo:
+        return RedirectResponse("/login?error=falta", status_code=303)
+
     tabla = alumnos()
-    encontrado = None
-    for n, c in tabla.items():
-        if n.lower() == nombre.lower() and c == codigo:
-            encontrado = n
-            break
-    if not encontrado:
-        return RedirectResponse("/login?error=1", status_code=303)
+    real = next((n for n in tabla if n.lower() == alias.lower()), None)
+    llaves = leer_llaves()
+
+    # 1) alumno ya registrado con su llave
+    if real and tabla[real] == codigo:
+        return _entrar_como(real)
+
+    # 2) llave libre: registra el alias nuevo, o re-vincula una llave nueva al mismo alias (rotacion)
+    if codigo in llaves and llaves[codigo].get("alumno") is None:
+        if real:
+            vieja = tabla[real]
+            tabla[real] = codigo
+            guardar_alumnos(tabla)
+            liberar_llave(vieja)
+        else:
+            tabla[alias] = codigo
+            guardar_alumnos(tabla)
+            real = alias
+        marcar_llave(codigo, real)
+        return _entrar_como(real)
+
+    # 3) alias tomado por otro
+    if real and real.lower() != alias.lower():
+        return RedirectResponse("/login?error=tomado", status_code=303)
+    if real:
+        return RedirectResponse("/login?error=otrollave", status_code=303)
+    return RedirectResponse("/login?error=llave", status_code=303)
+
+
+def _entrar_como(nombre: str) -> RedirectResponse:
     r = RedirectResponse("/", status_code=303)
-    galleta = base64.urlsafe_b64encode(encontrado.encode()).decode() + "." + firmar(encontrado)
+    galleta = base64.urlsafe_b64encode(nombre.encode()).decode() + "." + firmar(nombre)
     r.set_cookie(COOKIE, galleta, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30)
     return r
 
@@ -299,12 +388,75 @@ def vista_admin(req: Request):
 @app.post("/admin/entrar")
 async def admin_entrar(req: Request):
     datos = parse_qs((await req.body()).decode("utf-8", "ignore"))
+    usuario = (datos.get("usuario") or [""])[0].strip().lower()
     clave = (datos.get("clave") or [""])[0].strip()
-    if clave != (CFG.get("ADMIN_CLAVE") or ""):
+    if usuario != (CFG.get("ADMIN_USER") or "profe").lower() or clave != (CFG.get("ADMIN_CLAVE") or ""):
         return RedirectResponse("/admin?error=1", status_code=303)
     r = RedirectResponse("/panel", status_code=303)
     r.set_cookie(COOKIE_ADMIN, firmar_admin(), httponly=True, samesite="lax", max_age=60 * 60 * 24 * 90)
     return r
+
+
+@app.get("/admin/a-chat")
+def admin_a_chat(req: Request):
+    """Entra al chat con la cuenta del admin, sin llave."""
+    if not es_admin(req):
+        return RedirectResponse("/admin", status_code=303)
+    usuario = CFG.get("ADMIN_USER") or "profe"
+    tabla = alumnos()
+    if usuario not in tabla:
+        tabla[usuario] = codigo_random()
+        guardar_alumnos(tabla)
+    return _entrar_como(usuario)
+
+
+@app.post("/api/admin/cuenta")
+async def admin_cuenta(req: Request, body: dict = Body(...)):
+    """Cambia usuario y clave del panel."""
+    solo_admin(req)
+    usuario = str(body.get("usuario") or "").strip()
+    clave = str(body.get("clave") or "").strip()
+    archivo = RAIZ / ".env"
+    lineas = archivo.read_text(encoding="utf-8").splitlines()
+    salida = []
+    for l in lineas:
+        if l.startswith("ADMIN_USER=") and usuario:
+            salida.append("ADMIN_USER=" + usuario)
+        elif l.startswith("ADMIN_CLAVE=") and clave:
+            salida.append("ADMIN_CLAVE=" + clave)
+        else:
+            salida.append(l)
+    archivo.write_text("\n".join(salida) + "\n", encoding="utf-8")
+    CFG["ADMIN_USER"] = usuario or CFG.get("ADMIN_USER")
+    CFG["ADMIN_CLAVE"] = clave or CFG.get("ADMIN_CLAVE")
+    return {"usuario": CFG.get("ADMIN_USER"), "clave_cambiada": bool(clave)}
+
+
+@app.get("/api/admin/llaves")
+def admin_llaves(req: Request):
+    solo_admin(req)
+    llaves = leer_llaves()
+    libres = [c for c, v in llaves.items() if v.get("alumno") is None]
+    usadas = {c: v.get("alumno") for c, v in llaves.items() if v.get("alumno")}
+    return {"libres": libres, "usadas": usadas, "enlace": url_publica(), "total": len(llaves)}
+
+
+@app.post("/api/admin/llaves")
+async def admin_crear_llaves(req: Request, body: dict = Body(...)):
+    solo_admin(req)
+    cuantas = max(1, min(int(body.get("cuantas") or 1), 200))
+    return {"creadas": crear_llaves(cuantas), "enlace": url_publica()}
+
+
+@app.post("/api/admin/llave/borrar")
+async def admin_borrar_llave(req: Request, body: dict = Body(...)):
+    solo_admin(req)
+    codigo = str(body.get("codigo") or "").strip()
+    llaves = leer_llaves()
+    if codigo in llaves:
+        llaves.pop(codigo)
+        guardar_llaves(llaves)
+    return {"borrada": codigo}
 
 
 @app.get("/admin/salir")
@@ -382,15 +534,23 @@ async def admin_lote(req: Request, body: dict = Body(...)):
 
 @app.post("/api/admin/rotar")
 async def admin_rotar(req: Request, body: dict = Body(...)):
+    """Le da una llave nueva al alumno y libera la vieja."""
     solo_admin(req)
     nombre = str(body.get("nombre") or "").strip()
     tabla = alumnos()
     real = next((n for n in tabla if n.lower() == nombre.lower()), None)
     if not real:
         raise HTTPException(404, "no existe ese alumno")
-    tabla[real] = codigo_random()
+    vieja = tabla[real]
+    nueva = crear_llaves(1)[0]
+    tabla[real] = nueva
     guardar_alumnos(tabla)
-    return {"nombre": real, "codigo": tabla[real], "enlace": url_publica()}
+    marcar_llave(nueva, real)
+    if vieja and vieja in leer_llaves():
+        llaves = leer_llaves()
+        llaves.pop(vieja, None)
+        guardar_llaves(llaves)
+    return {"nombre": real, "codigo": nueva, "enlace": url_publica()}
 
 
 @app.post("/api/admin/borrar")
@@ -403,6 +563,12 @@ async def admin_borrar(req: Request, body: dict = Body(...)):
         raise HTTPException(404, "no existe ese alumno")
     tabla.pop(real)
     guardar_alumnos(tabla)
+    liberar_llave(codigo_actual := (tabla_llaves := leer_llaves()) and None or None) if False else None
+    llaves = leer_llaves()
+    for codigo, v in list(llaves.items()):
+        if v.get("alumno") == real:
+            llaves[codigo]["alumno"] = None
+    guardar_llaves(llaves)
     u = leer_uso()
     u["alumnos"].pop(real, None)
     guardar_uso(u)

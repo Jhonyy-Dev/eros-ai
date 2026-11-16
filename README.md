@@ -14,6 +14,10 @@ modelo responder: OpenRouter en la nube y, si falla, el modelo local calibrado e
 Autostart: tres accesos en la carpeta Inicio (`Eros Modelo.vbs`, `Eros Web.vbs`, `Eros Tunel.vbs`).
 La URL pública del túnel se imprime al arrancar, queda en `url_publica.txt`, en `/api/estado` y en el panel.
 
+## Panel secreto del profe, llaves de invitación y logo
+
+El logo oficial vive en server/static/eros.jpg y se usa en el chat (arriba a la izquierda y en las respuestas), el login y el panel.
+
 ## Panel secreto del profe y creación de alumnos
 
 El panel vive en `/panel` y está protegido por `ADMIN_CLAVE` (cookie aparte de la de los alumnos):

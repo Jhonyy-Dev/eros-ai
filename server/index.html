@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Eros</title>
 <meta name="description" content="Eros · asistente del curso">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f2f2f3'/><text x='16' y='22' font-size='18' font-family='sans-serif' text-anchor='middle' fill='%230b0b0c'>E</text></svg>">
+<link rel="icon" href="/static/eros.jpg">
 <style>
   :root{
     --bg:#0b0b0c; --fg:#f2f2f3; --fg2:#9b9ba1; --line:#232326; --soft:#141416; --soft2:#101012;
@@ -26,7 +26,7 @@
   /* lateral */
   #lado{width:268px;flex:0 0 268px;background:var(--soft2);border-right:1px solid var(--line);display:flex;flex-direction:column}
   .marca{display:flex;align-items:center;gap:10px;padding:16px 16px 12px}
-  .logo{width:34px;height:34px;border-radius:11px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-weight:700}
+  .logo{width:36px;height:36px;border-radius:50%;object-fit:cover;border:1px solid var(--line);background:#000;flex:0 0 36px}
   .marca b{display:block;line-height:1.2}
   .marca small{color:var(--fg2);font-size:11.5px}
   .nuevo{margin:6px 12px 10px;padding:11px 14px;border-radius:12px;background:var(--fg);color:var(--bg);font-weight:600;
@@ -77,7 +77,8 @@
   .user{display:flex;justify-content:flex-end}
   .user .burbuja{background:#1c1c20;border:1px solid var(--line);border-radius:15px 15px 4px 15px;padding:10px 14px;max-width:78%;white-space:pre-wrap}
   .ia .cab{display:flex;align-items:center;gap:9px;margin-bottom:8px}
-  .ia .cab .av{width:27px;height:27px;border-radius:9px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-size:12px;font-weight:700}
+  .ia .cab .av{width:29px;height:29px;border-radius:50%;overflow:hidden;border:1px solid var(--line);background:#000;flex:0 0 29px}
+  .ia .cab .av img{width:100%;height:100%;object-fit:cover;display:block}
   .ia .cab .nom{font-size:13px;font-weight:600}
   .ia .cab .et{font-size:11.5px;color:var(--fg2)}
   .cuerpo{white-space:pre-wrap;word-wrap:break-word;font-size:15.5px}
@@ -130,7 +131,7 @@
 <div id="app">
   <aside id="lado">
     <div class="marca">
-      <div class="logo">E</div>
+      <img class="logo" src="/static/eros.jpg" alt="Eros">
       <div><b>Eros</b><small>asistente del curso</small></div>
     </div>
     <button class="nuevo" id="nuevo"><span>Nueva conversación</span><span>+</span></button>
@@ -163,7 +164,7 @@
     <div id="hilo">
       <div class="col">
         <div id="inicio">
-          <div class="globo">E</div>
+          <div class="globo"><img src="/static/eros.jpg" alt="Eros"></div>
           <h1>Hola, soy Eros</h1>
           <p>Asistente del curso para programación y tecnología. Sin filtros, con memoria de toda la conversación y respuestas con datos. Tienes <span id="textoLimite">25</span> mensajes por día.</p>
           <div class="tarjetas" id="tarjetas"></div>
@@ -266,7 +267,7 @@ function turno(rol, texto, animar = true){
   if (!animar) d.style.animation = 'none';
   if (rol === 'user'){ d.innerHTML = '<div class="burbuja">' + esc(texto) + '</div>'; }
   else {
-    d.innerHTML = '<div class="cab"><span class="av">E</span><span class="nom">Eros</span><span class="et" id="etq"></span></div>' +
+    d.innerHTML = '<div class="cab"><span class="av"><img src="/static/eros.jpg" alt=""></span><span class="nom">Eros</span><span class="et" id="etq"></span></div>' +
       '<div class="cuerpo"></div><div class="acciones"><button class="copiarTurno">copiar</button><button class="regen">regenerar</button></div>';
   }
   $('#hilo').querySelector('.col').appendChild(d);

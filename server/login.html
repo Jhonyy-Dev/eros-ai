@@ -4,20 +4,22 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Entrar · Eros</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f2f2f3'/><text x='16' y='22' font-size='18' font-family='sans-serif' text-anchor='middle' fill='%230b0b0c'>E</text></svg>">
+<link rel="icon" href="/static/eros.jpg">
 <style>
   :root{ --bg:#0b0b0c; --fg:#f2f2f3; --fg2:#9b9ba1; --line:#232326; --soft:#141416;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif; }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
   body{background:var(--bg);color:var(--fg);font:16px/1.6 var(--sans);display:grid;place-items:center;padding:24px}
-  .caja{width:100%;max-width:400px;border:1px solid var(--line);border-radius:18px;padding:26px;background:var(--soft)}
-  .logo{width:44px;height:44px;border-radius:13px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-weight:700;font-size:21px;margin-bottom:16px}
-  h1{font-size:22px;margin:0 0 6px;letter-spacing:-.01em}
-  p.sub{color:var(--fg2);font-size:13.5px;margin:0 0 22px}
+  .caja{width:100%;max-width:410px;border:1px solid var(--line);border-radius:18px;padding:26px;background:var(--soft)}
+  .logo{width:92px;height:92px;border-radius:50%;object-fit:cover;border:1px solid var(--line);
+    display:block;margin:0 auto 14px;background:#000}
+  h1{font-size:22px;margin:0 0 6px;letter-spacing:-.01em;text-align:center}
+  p.sub{color:var(--fg2);font-size:13.5px;margin:0 0 22px;text-align:center}
   label{display:block;font-size:12px;color:var(--fg2);margin:14px 0 6px}
   input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);outline:none;font:inherit}
   input:focus{border-color:var(--fg)}
+  input#codigo{letter-spacing:.14em;text-transform:lowercase}
   button{width:100%;margin-top:20px;padding:13px;border:0;border-radius:12px;background:var(--fg);color:var(--bg);
     font:inherit;font-weight:600;cursor:pointer}
   button:hover{opacity:.9}
@@ -28,19 +30,27 @@
 </head>
 <body>
   <form class="caja" method="post" action="/login">
-    <div class="logo">E</div>
+    <img class="logo" src="/static/eros.jpg" alt="Eros">
     <h1>Eros</h1>
-    <p class="sub">Entra con tu nombre y el código que te dio el profe.</p>
-    <div class="malo" id="malo">Nombre o código incorrecto. Fíjate en mayúsculas y vuelve a intentar.</div>
-    <label for="nombre">Tu nombre</label>
+    <p class="sub">Escribe tu nombre o alias y el código de invitación que te dio el profe.</p>
+    <div class="malo" id="malo"></div>
+    <label for="nombre">Tu nombre o alias</label>
     <input id="nombre" name="nombre" placeholder="ej: ana" autocomplete="username" autofocus required>
     <label for="codigo">Código de invitación</label>
-    <input id="codigo" name="codigo" placeholder="ej: clase2026" autocomplete="current-password" required>
+    <input id="codigo" name="codigo" placeholder="ej: k3m7pq" autocomplete="current-password" required>
     <button type="submit">Entrar</button>
-    <div class="pie">Asistente del curso · sin filtros · responde con datos</div>
+    <div class="pie">Si el alias está libre, queda registrado a tu nombre y no lo puede usar otro.</div>
   </form>
 <script>
-  if (new URLSearchParams(location.search).get('error')) document.querySelector('#malo').style.display = 'block';
+  const mensajes = {
+    llave: 'Ese código no existe o ya fue usado. Pídele uno nuevo al profe.',
+    tomado: 'Ese alias ya está tomado. Usa otro o entra con el código de ese alias.',
+    otrollave: 'Ese alias existe, pero el código es de otra persona. Pide tu código al profe o usa tu alias tal como lo registraste.',
+    falta: 'Completa los dos campos.',
+    '1': 'Nombre o código incorrecto.'
+  };
+  const e = new URLSearchParams(location.search).get('error');
+  if (e) { const m = document.querySelector('#malo'); m.textContent = mensajes[e] || mensajes['1']; m.style.display = 'block'; }
 </script>
 </body>
 </html>

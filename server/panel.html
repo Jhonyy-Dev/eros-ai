@@ -38,16 +38,26 @@
 <body>
 <div class="col">
   <h1><span class="sello">E</span> Panel secreto de Eros</h1>
-  <div class="nota">Solo el profe entra acá · <a href="/">ir al chat</a> · <a href="/admin/salir">salir</a> · se refresca cada 10 s</div>
+  <div class="nota">Solo el profe entra acá · <a href="/admin/a-chat">entrar al chat como admin</a> · <a href="/">ir al chat</a> · <a href="/admin/salir">salir</a> · se refresca cada 10 s</div>
 
   <div class="tarjetas" id="tarjetas"></div>
 
-  <h2>invitaciones de alumnos</h2>
+  <h2>llaves de invitación (se las das a los alumnos)</h2>
   <div class="alta">
-    <input id="nuevoNombre" placeholder="nombre o alias del alumno" size="28">
-    <button class="principal" id="crear">Crear alumno</button>
-    <span class="nota">o</span>
-    <button id="lote">Crear 10 de golpe</button>
+    <button class="principal" id="crearLlave">Generar 1 llave</button>
+    <button id="crear10">Generar 10 llaves</button>
+    <button id="copiarLibres">Copiar las libres</button>
+    <span class="nota">El alumno se registra solo: pone su alias y la llave. El alias queda a su nombre y no lo puede usar otro.</span>
+  </div>
+  <table style="margin-top:12px">
+    <thead><tr><th>llave</th><th>estado</th><th>alumno</th><th>acciones</th></tr></thead>
+    <tbody id="llaves"></tbody>
+  </table>
+
+  <h2>alumnos registrados</h2>
+  <div class="alta">
+    <input id="nuevoNombre" placeholder="pre-registrar un alias (opcional)" size="28">
+    <button id="crear">Pre-registrar alias</button>
     <button id="copiarTodo">Copiar todos los códigos</button>
   </div>
   <div class="ok" id="ok"></div>
@@ -61,6 +71,14 @@
 
   <h2>últimas peticiones</h2>
   <table><thead><tr><th>hora</th><th>alumno</th><th>entrada</th><th>salida</th><th>costo</th></tr></thead><tbody id="ultimas"></tbody></table>
+
+  <h2>mi cuenta de admin</h2>
+  <div class="alta">
+    <input id="admUsuario" placeholder="usuario" size="14">
+    <input id="admClave" placeholder="clave nueva" size="18">
+    <button class="principal" id="guardarCuenta">Guardar</button>
+    <span class="nota">Con esto entrás al panel (y al chat con el enlace de arriba). Se guarda en .env.</span>
+  </div>
 
   <h2>notas</h2>
   <div class="nota">
@@ -80,9 +98,10 @@ async function api(ruta, cuerpo){
   return j;
 }
 async function pintar(){
-  let d, u;
-  try { d = await (await fetch('/api/admin/alumnos')).json(); u = await (await fetch('/api/uso')).json(); }
+  let d, u, ll;
+  try { d = await (await fetch('/api/admin/alumnos')).json(); u = await (await fetch('/api/uso')).json(); ll = await (await fetch('/api/admin/llaves')).json(); }
   catch(e){ $('#tarjetas').innerHTML = '<div class="t">sin conexión con el gateway</div>'; return; }
+  d.llaves_libres = ll.libres; d.llaves_usadas = ll.usadas;
   $('#tarjetas').innerHTML = [
     ['en línea / activos 15 min', d.activos_15min || 0],
     ['alumnos con acceso', (d.alumnos || []).length],
@@ -91,6 +110,13 @@ async function pintar(){
     ['costo hoy', 'US$ ' + (u.costo_total || 0).toFixed(4)],
     ['modelo', u.motor || u.modelo || '-']
   ].map(([k, v]) => '<div class="t"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>').join('');
+  $('#llaves').innerHTML = (() => {
+    const libres = (d.llaves_libres || []).map(c => '<tr><td><code>' + c + '</code></td><td>libre</td><td>—</td>' +
+      '<td><div class="acciones"><button data-copiar_llave="' + c + '">copiar</button><button data-borrar_llave="' + c + '">borrar</button></div></td></tr>');
+    const usadas = Object.entries(d.llaves_usadas || {}).map(([c, a]) => '<tr><td><code>' + c + '</code></td><td>usada</td><td>' + a + '</td>' +
+      '<td><div class="acciones"><button data-copiar_llave="' + c + '">copiar</button><button data-borrar_llave="' + c + '">borrar</button></div></td></tr>');
+    return (libres.length + usadas.length) ? libres.join('') + usadas.join('') : '<tr><td colspan="4">todavía no generaste llaves</td></tr>';
+  })();
   $('#alumnos').innerHTML = (d.alumnos || []).length ? d.alumnos.map(a =>
     '<tr><td>' + a.nombre + '</td><td><code>' + a.codigo + '</code></td><td>' + (a.ultima ? 'última vez ' + a.ultima.slice(11) : 'sin usar') + '</td>' +
     '<td>' + num(a.mensajes) + '</td><td class="mono">' + num(a.tokens) + '</td>' +
@@ -107,9 +133,26 @@ async function pintar(){
 }
 $('#crear').onclick = async () => {
   const nombre = $('#nuevoNombre').value.trim();
-  if (!nombre) return decir('escribí un nombre');
+  if (!nombre) return decir('escribí un alias');
   const j = await api('/api/admin/alumno', { nombre });
-  if (j) { $('#nuevoNombre').value = ''; decir('creado ' + j.nombre + ' con código ' + j.codigo + '\n' + j.enlace + '  (nombre ' + j.nombre + ', código ' + j.codigo + ')'); pintar(); }
+  if (j) { $('#nuevoNombre').value = ''; decir('pre-registrado ' + j.nombre + '\nEnlace: ' + j.enlace + '\nAlias: ' + j.nombre + '\nCódigo: ' + j.codigo); pintar(); }
+};
+$('#crearLlave').onclick = async () => {
+  const j = await api('/api/admin/llaves', { cuantas: 1 });
+  if (j) { await navigator.clipboard.writeText('Eros — asistente del curso: ' + j.enlace + '\nTu código de invitación: ' + j.creadas[0]); decir('llave creada y copiada: ' + j.creadas[0]); pintar(); }
+};
+$('#crear10').onclick = async () => {
+  const j = await api('/api/admin/llaves', { cuantas: 10 });
+  if (j) { decir('10 llaves creadas:\n' + j.creadas.join('  ')); pintar(); }
+};
+$('#copiarLibres').onclick = async () => {
+  const j = await (await fetch('/api/admin/llaves')).json();
+  const t = 'Eros — asistente del curso: ' + j.enlace + '\n\nCada uno se registra con su alias y una de estas llaves (una por persona):\n' + j.libres.join('\n');
+  await navigator.clipboard.writeText(t); decir('copiado:\n' + t);
+};
+$('#guardarCuenta').onclick = async () => {
+  const j = await api('/api/admin/cuenta', { usuario: $('#admUsuario').value.trim(), clave: $('#admClave').value.trim() });
+  if (j) { $('#admClave').value = ''; decir('guardado. usuario: ' + j.usuario + (j.clave_cambiada ? ' · clave actualizada' : '')); }
 };
 $('#lote').onclick = async () => {
   const j = await api('/api/admin/lote', { cuantos: 10 });
@@ -132,6 +175,14 @@ document.addEventListener('click', async e => {
     if (a) { const t = 'Eros, el asistente del curso: ' + d.enlace + '\nEntra con tu nombre (' + a.nombre + ') y este código: ' + a.codigo;
       await navigator.clipboard.writeText(t); decir('copiado:\n' + t); }
   }
+  const cl = e.target.closest('[data-copiar_llave]');
+  if (cl) {
+    const d = await (await fetch('/api/admin/llaves')).json();
+    const t = 'Eros — asistente del curso: ' + d.enlace + '\nRegístrate con tu alias y este código de invitación: ' + cl.dataset.copiar_llave;
+    await navigator.clipboard.writeText(t); decir('copiado:\n' + t);
+  }
+  const bl = e.target.closest('[data-borrar_llave]');
+  if (bl) { const j = await api('/api/admin/llave/borrar', { codigo: bl.dataset.borrar_llave }); if (j) { decir('llave borrada: ' + j.borrada); pintar(); } }
 });
 $('#nuevoNombre').addEventListener('keydown', e => { if (e.key === 'Enter') $('#crear').click(); });
 pintar(); setInterval(pintar, 10000);

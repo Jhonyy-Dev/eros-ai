@@ -4,18 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Panel secreto · Eros</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23f2f2f3'/><text x='16' y='22' font-size='18' font-family='sans-serif' text-anchor='middle' fill='%230b0b0c'>E</text></svg>">
+<link rel="icon" href="/static/eros.jpg">
 <style>
   :root{ --bg:#0b0b0c; --fg:#f2f2f3; --fg2:#9b9ba1; --line:#232326; --soft:#141416;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
   body{background:var(--bg);color:var(--fg);font:16px/1.6 var(--sans);display:grid;place-items:center;padding:24px}
-  .caja{width:100%;max-width:380px;border:1px solid var(--line);border-radius:18px;padding:26px;background:var(--soft)}
-  .logo{width:44px;height:44px;border-radius:13px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-weight:700;font-size:21px;margin-bottom:16px}
-  h1{font-size:21px;margin:0 0 6px}
-  p{color:var(--fg2);font-size:13.5px;margin:0 0 20px}
-  input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);outline:none;font:inherit;letter-spacing:.08em}
+  .caja{width:100%;max-width:390px;border:1px solid var(--line);border-radius:18px;padding:26px;background:var(--soft)}
+  .logo{width:84px;height:84px;border-radius:50%;object-fit:cover;border:1px solid var(--line);display:block;margin:0 auto 14px;background:#000}
+  h1{font-size:20px;margin:0 0 6px;text-align:center}
+  p{color:var(--fg2);font-size:13px;margin:0 0 18px;text-align:center}
+  label{display:block;font-size:12px;color:var(--fg2);margin:12px 0 6px}
+  input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);outline:none;font:inherit}
   input:focus{border-color:var(--fg)}
   button{width:100%;margin-top:18px;padding:13px;border:0;border-radius:12px;background:var(--fg);color:var(--bg);font:inherit;font-weight:600;cursor:pointer}
   .malo{border:1px solid var(--line);border-left:3px solid #ff5f5f;border-radius:10px;padding:9px 12px;font-size:13px;color:var(--fg2);margin-bottom:8px;display:none}
@@ -23,11 +24,14 @@
 </head>
 <body>
   <form class="caja" method="post" action="/admin/entrar">
-    <div class="logo">E</div>
+    <img class="logo" src="/static/eros.jpg" alt="Eros">
     <h1>Panel secreto de Eros</h1>
-    <p>Solo para el profe. Los alumnos no ven esto.</p>
-    <div class="malo" id="malo">Clave incorrecta.</div>
-    <input name="clave" type="password" placeholder="clave de admin" autofocus required autocomplete="current-password">
+    <p>Solo para el admin. Los alumnos no ven esto.</p>
+    <div class="malo" id="malo">Usuario o clave incorrectos.</div>
+    <label for="usuario">Usuario</label>
+    <input id="usuario" name="usuario" placeholder="profe" autocomplete="username" autofocus required>
+    <label for="clave">Clave</label>
+    <input id="clave" name="clave" type="password" placeholder="tu clave de admin" autocomplete="current-password" required>
     <button type="submit">Entrar</button>
   </form>
 <script>if (new URLSearchParams(location.search).get('error')) document.querySelector('#malo').style.display = 'block';</script>
