@@ -163,6 +163,7 @@ def crear_llaves(cuantas: int) -> list:
 
 def marcar_llave(codigo: str, alias) -> None:
     llaves = leer_llaves()
+    codigo = llave_real(codigo) or codigo
     if codigo in llaves:
         llaves[codigo]["alumno"] = alias
         guardar_llaves(llaves)
@@ -170,11 +171,24 @@ def marcar_llave(codigo: str, alias) -> None:
 
 def liberar_llave(codigo: str) -> None:
     llaves = leer_llaves()
+    codigo = llave_real(codigo) or codigo
     if codigo in llaves and llaves[codigo].get("alumno") is None:
         pass
     elif codigo in llaves:
         llaves[codigo]["alumno"] = None
         guardar_llaves(llaves)
+
+
+def misma(a: str, b: str) -> bool:
+    return (a or "").strip().lower() == (b or "").strip().lower()
+
+
+def llave_real(codigo: str):
+    """Devuelve la llave tal cual figura, comparando sin importar mayusculas."""
+    for c in leer_llaves():
+        if misma(c, codigo):
+            return c
+    return None
 
 
 def llave_libre(codigo: str) -> bool:
@@ -322,15 +336,26 @@ async def entrar(req: Request):
         return RedirectResponse("/login?error=falta", status_code=303)
 
     tabla = alumnos()
-    real = next((n for n in tabla if n.lower() == alias.lower()), None)
+    real = next((n for n in tabla if misma(n, alias)), None)
     llaves = leer_llaves()
+    clave_admin = CFG.get("ADMIN_CLAVE") or ""
+
+    # 0) la clave maestra del admin sirve para cualquier alias (y lo registra si no existe)
+    if clave_admin and misma(codigo, clave_admin):
+        if not real:
+            tabla[alias] = codigo_random()
+            guardar_alumnos(tabla)
+            real = alias
+        return _entrar_como(real)
 
     # 1) alumno ya registrado con su llave
-    if real and tabla[real] == codigo:
+    if real and misma(tabla[real], codigo):
         return _entrar_como(real)
 
     # 2) llave libre: registra el alias nuevo, o re-vincula una llave nueva al mismo alias (rotacion)
-    if codigo in llaves and llaves[codigo].get("alumno") is None:
+    codigo_real = llave_real(codigo)
+    if codigo_real and llaves[codigo_real].get("alumno") is None:
+        codigo = codigo_real
         if real:
             vieja = tabla[real]
             tabla[real] = codigo
