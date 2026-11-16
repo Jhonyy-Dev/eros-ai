@@ -323,7 +323,15 @@ def estatico(nombre: str):
     archivo = RAIZ / "server" / "static" / nombre
     if not archivo.exists():
         raise HTTPException(404, "no existe")
-    tipo = "image/jpeg" if nombre.lower().endswith((".jpg", ".jpeg")) else "image/png"
+    bajo = nombre.lower()
+    if bajo.endswith((".jpg", ".jpeg")):
+        tipo = "image/jpeg"
+    elif bajo.endswith(".mp4"):
+        tipo = "video/mp4"
+    elif bajo.endswith(".webm"):
+        tipo = "video/webm"
+    else:
+        tipo = "image/png"
     return FileResponse(archivo, media_type=tipo, headers={"Cache-Control": "public, max-age=86400"})
 
 

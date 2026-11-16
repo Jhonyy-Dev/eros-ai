@@ -12,8 +12,12 @@
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0}
-  body{background:var(--bg);color:var(--fg);font:16px/1.6 var(--sans);display:grid;place-items:center;padding:24px}
-  .caja{width:100%;max-width:420px;border:1px solid var(--line);border-radius:20px;padding:26px;background:var(--soft);
+  body{background:#000;color:var(--fg);font:16px/1.6 var(--sans);display:grid;place-items:center;padding:24px}
+  #fondo{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.55;filter:contrast(1.08)}
+  #velo{position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:radial-gradient(120% 120% at 50% 38%, rgba(11,11,12,.30) 0%, rgba(11,11,12,.86) 62%, rgba(11,11,12,.96) 100%)}
+  .caja{position:relative;z-index:2}
+  .caja{width:100%;max-width:420px;border:1px solid var(--line);border-radius:20px;padding:26px;background:rgba(20,20,22,.92);backdrop-filter:blur(3px);
     box-shadow:0 0 0 1px rgba(255,255,255,.02), 0 24px 60px rgba(0,0,0,.45)}
   .logo{width:clamp(72px,26vw,96px);height:clamp(72px,26vw,96px);border-radius:50%;object-fit:contain;
     border:1px solid var(--line);display:block;margin:0 auto 14px;background:#000}
@@ -68,6 +72,8 @@
 </style>
 </head>
 <body>
+  <video id="fondo" src="/static/fondo.mp4" autoplay muted loop playsinline preload="auto" aria-hidden="true"></video>
+  <div id="velo" aria-hidden="true"></div>
   <form class="caja" method="post" action="/login" id="forma">
     <img class="logo" src="/static/eros.jpg" alt="Eros">
     <h1>Eros</h1>
@@ -167,6 +173,12 @@
   campo.addEventListener('blur',  () => caja.classList.remove('viva'));
   forma.addEventListener('submit', () => { caja.classList.remove('viva'); caja.classList.add('bien'); });
   window.addEventListener('load', () => { if (textoActual()) descifrar(700); else { pintar("k3m7pq", true); actualizarPista(); } });
+
+  const fondo = document.getElementById('fondo');
+  if (fondo){
+    fondo.addEventListener('error', () => { fondo.style.display = 'none'; });
+    if (fondo.play) fondo.play().catch(() => {});
+  }
 
   const mensajes = {
     llave: 'Esa clave no existe o ya fue usada. Pídele una nueva al profe.',
