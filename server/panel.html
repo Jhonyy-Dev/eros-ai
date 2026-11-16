@@ -3,85 +3,64 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>panel · local 9b</title>
+<title>Panel · Eros</title>
 <style>
-  * { box-sizing:border-box; }
-  body { margin:0; background:#fff; color:#000; font:13px/1.5 ui-monospace,Menlo,Consolas,monospace; }
-  .wrap { max-width:860px; margin:0 auto; padding:20px 16px 60px; }
-  h1 { font-size:15px; margin:0 0 4px; letter-spacing:.02em; }
-  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.14em; margin:26px 0 8px; font-weight:600; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:#000; border:1px solid #000; }
-  .celda { background:#fff; padding:10px 12px; }
-  .celda .k { font-size:10px; text-transform:uppercase; letter-spacing:.12em; opacity:.6; }
-  .celda .v { font-size:20px; }
-  table { width:100%; border-collapse:collapse; border:1px solid #000; }
-  th,td { text-align:left; padding:6px 8px; border-bottom:1px solid #000; font-size:12px; }
-  tr:last-child td { border-bottom:0; }
-  th { background:#000; color:#fff; font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
-  .barra { height:8px; border:1px solid #000; margin-top:6px; }
-  .barra i { display:block; height:100%; background:#000; }
-  a { color:#000; }
-  .nota { opacity:.65; font-size:11px; margin-top:6px; }
-  #fecha { opacity:.6; }
+  :root{ --bg:#0b0b0c; --fg:#f2f2f3; --fg2:#9b9ba1; --line:#232326; --soft:#141416;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 var(--sans);padding:26px 18px 70px}
+  .col{max-width:940px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--fg2);margin:26px 0 8px;font-weight:600}
+  .nota{color:var(--fg2);font-size:12px}
+  a{color:var(--fg)}
+  .tarjetas{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:18px}
+  .t{border:1px solid var(--line);border-radius:14px;padding:14px;background:var(--soft)}
+  .t .k{font-size:11px;color:var(--fg2);text-transform:uppercase;letter-spacing:.08em}
+  .t .v{font-size:22px;font-weight:600;margin-top:4px}
+  table{width:100%;border-collapse:collapse;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);font-size:13px}
+  tr:last-child td{border-bottom:0}
+  th{background:var(--soft);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--fg2)}
+  .mono{font-family:var(--mono);font-size:12px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>panel de uso · local 9b sin filtros</h1>
-  <div class="nota">se refresca solo cada 10 s · <a href="/">volver al chat</a> · <a href="/api/uso" target="_blank">json crudo</a></div>
+<div class="col">
+  <h1>Panel de uso · Eros</h1>
+  <div class="nota">Se refresca solo cada 10 s · <a href="/">volver al chat</a> · <a href="/api/uso" target="_blank">json</a> · <a href="/logout">salir</a></div>
 
-  <div class="grid" id="tarjetas"></div>
+  <div class="tarjetas" id="tarjetas"></div>
 
-  <h2>topes del día</h2>
-  <div id="topes"></div>
-  <div class="nota" id="fecha"></div>
-
-  <h2>consume por persona (ip)</h2>
-  <table><thead><tr><th>ip</th><th>peticiones</th><th>tokens</th><th>primera</th><th>última</th></tr></thead>
-  <tbody id="porip"></tbody></table>
+  <h2>consumo por alumno (hoy)</h2>
+  <table><thead><tr><th>alumno</th><th>mensajes</th><th>tokens entrada+salida</th><th>primera</th><th>última</th></tr></thead>
+  <tbody id="alumnos"></tbody></table>
 
   <h2>últimas peticiones</h2>
-  <table><thead><tr><th>hora</th><th>ip</th><th>tokens de salida</th></tr></thead><tbody id="ultimas"></tbody></table>
+  <table><thead><tr><th>hora</th><th>alumno</th><th>entrada</th><th>salida</th></tr></thead><tbody id="ultimas"></tbody></table>
 
-  <h2>días anteriores</h2>
-  <table><thead><tr><th>fecha</th><th>peticiones</th><th>ips distintas</th></tr></thead><tbody id="hist"></tbody></table>
+  <h2>notas</h2>
+  <div class="nota" id="notas"></div>
 </div>
 <script>
-const q = s => document.querySelector(s);
-function barra(usado, tope) {
-  const pct = Math.min(100, Math.round(100 * usado / Math.max(1, tope)));
-  return '<div class="barra"><i style="width:' + pct + '%"></i></div>';
-}
-async function pintar() {
-  let d, e;
-  try { d = await (await fetch('/api/uso')).json(); e = await (await fetch('/api/estado')).json(); }
-  catch (err) { q('#fecha').textContent = 'sin conexión con el gateway'; return; }
-
-  q('#tarjetas').innerHTML = [
-    ['peticiones hoy', d.total + ' / ' + d.tope_global],
-    ['tokens generados hoy', d.tokens],
-    ['personas distintas hoy', Object.keys(d.por_ip).length],
-    ['estado de la prueba', d.vigente ? 'vigente' : 'CERRADA'],
-  ].map(([k, v]) => '<div class="celda"><div class="k">' + k + '</div><div class="v">' + v + '</div></div>').join('');
-
-  q('#topes').innerHTML =
-    '<div>tope global del dia: ' + d.total + ' de ' + d.tope_global + barra(d.total, d.tope_global) + '</div>' +
-    '<div style="margin-top:10px">reserva por persona: ' + e.limite_por_ip + ' peticiones/dia</div>' +
-    '<div style="margin-top:10px">en vuelo ahora: ' + e.en_vuelo + ' · url publica: ' + (e.url_publica || 'sin tunel') + '</div>';
-  q('#fecha').textContent = 'cierre de la prueba: ' + d.fecha_fin + ' · dia contabilizado: ' + d.fecha;
-
-  const ips = Object.entries(d.por_ip).sort((a, b) => b[1].peticiones - a[1].peticiones);
-  q('#porip').innerHTML = ips.length ? ips.map(([ip, v]) =>
-    '<tr><td>' + ip + '</td><td>' + v.peticiones + '</td><td>' + (v.tokens || 0) + '</td><td>' + (v.primera || '-') + '</td><td>' + (v.ultima || '-') + '</td></tr>').join('')
-    : '<tr><td colspan="5">todavia nadie uso el servicio hoy</td></tr>';
-
-  q('#ultimas').innerHTML = d.ultimas.length ? d.ultimas.map(u =>
-    '<tr><td>' + u.hora + '</td><td>' + u.ip + '</td><td>' + u.tokens + '</td></tr>').join('')
-    : '<tr><td colspan="3">sin registros</td></tr>';
-
-  q('#hist').innerHTML = d.historico.length ? d.historico.slice().reverse().map(h =>
-    '<tr><td>' + h.fecha + '</td><td>' + h.total + '</td><td>' + Object.keys(h.por_ip || {}).length + '</td></tr>').join('')
-    : '<tr><td colspan="3">sin dias anteriores</td></tr>';
+const $ = s => document.querySelector(s);
+const num = n => (n || 0).toLocaleString('es');
+async function pintar(){
+  let d;
+  try { d = await (await fetch('/api/uso')).json(); } catch(e){ $('#notas').textContent = 'sin conexión con el gateway'; return; }
+  $('#tarjetas').innerHTML = [
+    ['mensajes hoy', num(d.total_mensajes)],
+    ['tokens hoy', num(d.total_tokens)],
+    ['alumnos activos', Object.keys(d.alumnos || {}).length],
+    ['modelo', d.modelo || '-']
+  ].map(([k,v]) => '<div class="t"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>').join('');
+  $('#alumnos').innerHTML = (d.alumnos && d.alumnos.length)
+    ? d.alumnos.map(a => '<tr><td>'+a.nombre+'</td><td>'+num(a.mensajes)+'</td><td class="mono">'+num(a.tokens)+'</td><td class="mono">'+(a.primera||'-')+'</td><td class="mono">'+(a.ultima||'-')+'</td></tr>').join('')
+    : '<tr><td colspan="5">todavía nadie usó Eros hoy</td></tr>';
+  $('#ultimas').innerHTML = (d.ultimas && d.ultimas.length)
+    ? d.ultimas.map(u => '<tr><td class="mono">'+u.hora+'</td><td>'+u.alumno+'</td><td class="mono">'+num(u.entrada)+'</td><td class="mono">'+num(u.salida)+'</td></tr>').join('')
+    : '<tr><td colspan="4">sin registros</td></tr>';
+  $('#notas').innerHTML = 'Día contabilizado: ' + d.fecha + '. Los límites por alumno y el modelo activo se cambian en <span class="mono">.env</span> y se aplican al reiniciar la web. La API key nunca se muestra: vive solo en el servidor.';
 }
 pintar(); setInterval(pintar, 10000);
 </script>
