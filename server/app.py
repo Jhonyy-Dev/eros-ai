@@ -174,14 +174,16 @@ def anotar(u: dict, nombre: str) -> None:
     guardar_uso(u)
 
 
-def sumar_tokens(nombre: str, entrada: int, salida: int) -> None:
+def sumar_tokens(nombre: str, entrada: int, salida: int, costo: float = 0.0) -> None:
     u = leer_uso()
     reg = u["alumnos"].setdefault(nombre, {"mensajes": 0, "tokens": 0})
     reg["tokens"] = reg.get("tokens", 0) + int(entrada) + int(salida)
     reg["tokens_salida"] = reg.get("tokens_salida", 0) + int(salida)
+    reg["costo"] = round(reg.get("costo", 0.0) + float(costo), 8)
+    u["costo_total"] = round(u.get("costo_total", 0.0) + float(costo), 8)
     u["log"] = (u.get("log") or [])[-200:]
     u["log"].append({"hora": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                     "alumno": nombre, "entrada": entrada, "salida": salida})
+                     "alumno": nombre, "entrada": entrada, "salida": salida, "costo": round(float(costo), 8)})
     guardar_uso(u)
 
 
@@ -253,6 +255,8 @@ def estado(req: Request):
         "limite_dia": tope_dia,
         "limite_minuto": int(CFG.get("LIMITE_MENSAJES_MINUTO") or 10),
         "tokens_hoy": reg.get("tokens", 0),
+        "costo_hoy": round(reg.get("costo", 0.0), 6),
+        "costo_total_hoy": round(u.get("costo_total", 0.0), 6),
         "url_publica": url_publica(),
         "alumnos_configurados": len(alumnos()),
         "fase_api_keys": (CFG.get("ENABLE_STUDENT_API_KEYS", "false").lower() == "true"),
@@ -267,6 +271,7 @@ def uso(req: Request):
     orden = sorted(u["alumnos"].items(), key=lambda x: x[1].get("mensajes", 0), reverse=True)
     return {"fecha": u["fecha"], "total_mensajes": sum(v.get("mensajes", 0) for v in u["alumnos"].values()),
             "total_tokens": sum(v.get("tokens", 0) for v in u["alumnos"].values()),
+            "costo_total": round(u.get("costo_total", 0.0), 6),
             "alumnos": [{"nombre": n, **v} for n, v in orden],
             "ultimas": list(reversed((u.get("log") or [])[-60:])), "modelo": models.activo(CFG)["visible"]}
 
@@ -305,6 +310,7 @@ async def chat(req: Request, body: dict = Body(...)):
 
     async def generador():
         entrada = salida = 0
+        costo = 0.0
         modelo_usado = ""
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
@@ -318,6 +324,7 @@ async def chat(req: Request, body: dict = Body(...)):
                 elif "uso" in ev:
                     entrada += ev["uso"].get("entrada", 0)
                     salida += ev["uso"].get("salida", 0)
+                    costo += ev["uso"].get("costo", 0.0)
                 elif "error" in ev:
                     amable = MENSAJES_AMABLES.get(ev.get("codigo"), "Hubo un problema con el modelo. Intenta otra vez.")
                     yield "data: " + json.dumps({"error": amable, "detalle": ev["error"]}) + "\n\n"
@@ -329,7 +336,7 @@ async def chat(req: Request, body: dict = Body(...)):
             yield "data: " + json.dumps({"error": "Problema de red. Intenta otra vez."}) + "\n\n"
         finally:
             if salida or entrada:
-                sumar_tokens(nombre, entrada, salida)
+                sumar_tokens(nombre, entrada, salida, costo)
 
     return StreamingResponse(generador(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

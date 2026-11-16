@@ -12,6 +12,7 @@ MODELOS = [
         "habilitado": True,
         "para_alumnos": True,
         "max_tokens": 4096,
+        "reasoning": False,
         "provider": {
             "order": ["deepinfra"],
             "allow_fallbacks": True,

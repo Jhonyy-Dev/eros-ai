@@ -56,7 +56,8 @@ async def _leer_sse(respuesta, con_uso: bool):
             continue
         if con_uso and j.get("usage"):
             u = j["usage"]
-            yield {"uso": {"entrada": u.get("prompt_tokens", 0), "salida": u.get("completion_tokens", 0)}}
+            yield {"uso": {"entrada": u.get("prompt_tokens", 0), "salida": u.get("completion_tokens", 0),
+                           "costo": float(u.get("cost") or 0)}}
         trozo = (j.get("choices") or [{}])[0].get("delta", {}).get("content") or ""
         if trozo:
             yield {"t": trozo}
@@ -79,6 +80,8 @@ async def _stream_openrouter(cfg: dict, modelo: dict, mensajes: list, max_tokens
     }
     if modelo.get("provider"):
         cuerpo["provider"] = modelo["provider"]
+    if modelo.get("reasoning") is not None:
+        cuerpo["reasoning"] = {"enabled": bool(modelo["reasoning"])}
     async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=15.0)) as cliente:
         respuesta = await _pedir(cliente, _url_openrouter(cfg), cabeceras, cuerpo)
         async for ev in _leer_sse(respuesta, True):

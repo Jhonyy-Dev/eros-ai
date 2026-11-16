@@ -33,11 +33,11 @@
   <div class="tarjetas" id="tarjetas"></div>
 
   <h2>consumo por alumno (hoy)</h2>
-  <table><thead><tr><th>alumno</th><th>mensajes</th><th>tokens entrada+salida</th><th>primera</th><th>última</th></tr></thead>
+  <table><thead><tr><th>alumno</th><th>mensajes</th><th>tokens</th><th>costo</th><th>primera</th><th>última</th></tr></thead>
   <tbody id="alumnos"></tbody></table>
 
   <h2>últimas peticiones</h2>
-  <table><thead><tr><th>hora</th><th>alumno</th><th>entrada</th><th>salida</th></tr></thead><tbody id="ultimas"></tbody></table>
+  <table><thead><tr><th>hora</th><th>alumno</th><th>entrada</th><th>salida</th><th>costo</th></tr></thead><tbody id="ultimas"></tbody></table>
 
   <h2>notas</h2>
   <div class="nota" id="notas"></div>
@@ -51,15 +51,16 @@ async function pintar(){
   $('#tarjetas').innerHTML = [
     ['mensajes hoy', num(d.total_mensajes)],
     ['tokens hoy', num(d.total_tokens)],
+    ['costo hoy', 'US$ ' + (d.costo_total || 0).toFixed(4)],
     ['alumnos activos', Object.keys(d.alumnos || {}).length],
     ['modelo', d.modelo || '-']
   ].map(([k,v]) => '<div class="t"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>').join('');
   $('#alumnos').innerHTML = (d.alumnos && d.alumnos.length)
-    ? d.alumnos.map(a => '<tr><td>'+a.nombre+'</td><td>'+num(a.mensajes)+'</td><td class="mono">'+num(a.tokens)+'</td><td class="mono">'+(a.primera||'-')+'</td><td class="mono">'+(a.ultima||'-')+'</td></tr>').join('')
-    : '<tr><td colspan="5">todavía nadie usó Eros hoy</td></tr>';
+    ? d.alumnos.map(a => '<tr><td>'+a.nombre+'</td><td>'+num(a.mensajes)+'</td><td class="mono">'+num(a.tokens)+'</td><td class="mono">US$ '+(a.costo||0).toFixed(4)+'</td><td class="mono">'+(a.primera||'-')+'</td><td class="mono">'+(a.ultima||'-')+'</td></tr>').join('')
+    : '<tr><td colspan="6">todavía nadie usó Eros hoy</td></tr>';
   $('#ultimas').innerHTML = (d.ultimas && d.ultimas.length)
-    ? d.ultimas.map(u => '<tr><td class="mono">'+u.hora+'</td><td>'+u.alumno+'</td><td class="mono">'+num(u.entrada)+'</td><td class="mono">'+num(u.salida)+'</td></tr>').join('')
-    : '<tr><td colspan="4">sin registros</td></tr>';
+    ? d.ultimas.map(u => '<tr><td class="mono">'+u.hora+'</td><td>'+u.alumno+'</td><td class="mono">'+num(u.entrada)+'</td><td class="mono">'+num(u.salida)+'</td><td class="mono">US$ '+(u.costo||0).toFixed(5)+'</td></tr>').join('')
+    : '<tr><td colspan="5">sin registros</td></tr>';
   $('#notas').innerHTML = 'Día contabilizado: ' + d.fecha + '. Los límites por alumno y el modelo activo se cambian en <span class="mono">.env</span> y se aplican al reiniciar la web. La API key nunca se muestra: vive solo en el servidor.';
 }
 pintar(); setInterval(pintar, 10000);
