@@ -47,7 +47,7 @@
   .quien{color:var(--fg);font-weight:600}
 
   /* centro */
-  #zona{flex:1;display:flex;flex-direction:column;min-width:0}
+  #zona{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
   header{height:56px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 16px;border-bottom:1px solid var(--line)}
   header .titulo{font-size:13.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42ch}
   header .der{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--fg2)}
@@ -57,7 +57,10 @@
   #menu{display:none}
   #franja{border-bottom:1px solid var(--line);background:#191305;color:#e8d48a;font-size:12.5px;padding:7px 16px;display:none}
 
-  #hilo{flex:1;overflow-y:auto;padding:24px 18px 10px;scroll-behavior:smooth}
+  #hilo{flex:1;overflow-y:auto;overflow-anchor:none;padding:24px 18px 10px}
+  #irFinal{position:absolute;right:18px;bottom:104px;width:36px;height:36px;border-radius:99px;border:1px solid var(--line);
+    background:var(--soft);color:var(--fg);display:none;place-items:center;z-index:20;font-size:15px}
+  #irFinal:hover{border-color:var(--fg)}
   .col{max-width:800px;margin:0 auto}
   #inicio{margin:5vh auto 0;text-align:center;max-width:660px}
   #inicio .globo{width:54px;height:54px;border-radius:16px;background:var(--fg);color:var(--bg);display:grid;place-items:center;font-size:25px;font-weight:700;margin:0 auto 16px}
@@ -162,11 +165,12 @@
         <div id="inicio">
           <div class="globo">E</div>
           <h1>Hola, soy Eros</h1>
-          <p>Asistente del curso para programación y tecnología. Sin filtros, con memoria de toda la conversación y respuestas con datos. Tienes <span id="textoLimite">100</span> mensajes por día.</p>
+          <p>Asistente del curso para programación y tecnología. Sin filtros, con memoria de toda la conversación y respuestas con datos. Tienes <span id="textoLimite">25</span> mensajes por día.</p>
           <div class="tarjetas" id="tarjetas"></div>
         </div>
       </div>
     </div>
+    <button id="irFinal" title="ir al final">↓</button>
 
     <div class="pie">
       <div class="cajaTexto">
@@ -197,8 +201,9 @@ const esc = t => t.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','
 const PALABRAS = {python:'and as assert async await break class continue def del elif else except finally for from global if import in is lambda none not or pass raise return try while with yield none true false self'.split(' '),
   javascript:'const let var function return if else for while class new async await try catch import from export default null true false this typeof'.split(' '),
   bash:'if then else fi for do done while case esac function echo cd ls grep sed awk cat sudo exit export local return'.split(' ')};
-function resaltar(codigo, len){
-  let t = esc(codigo);
+function resaltar(codigo, len, liviano){
+  if (liviano) return codigo;
+  let t = codigo;
   t = t.replace(/(&quot;|&#39;|"|')(?:(?!\1)[\s\S])*?\1/g, m => '\u0001' + m + '\u0002');
   t = t.replace(/(^|\s)(#[^\n]*|\/\/[^\n]*)/g, '$1\u0003$2\u0004');
   t = t.replace(/\b(\d+(?:\.\d+)?)\b/g, '\u0005$1\u0006');
@@ -209,13 +214,23 @@ function resaltar(codigo, len){
           .replace(/\u0005/g,'<span class="n">').replace(/\u0006/g,'</span>')
           .replace(/\u0007/g,'<span class="k">').replace(/\u0008/g,'</span>');
 }
-function md(txt){
+function md(txt, liviano){
   const pre = [];
-  let t = esc(txt).replace(/```(\w*)\n?([\s\S]*?)```/g, (m, l, c) => {
-    pre.push({ l: (l || 'texto').toLowerCase(), c: c.replace(/\n$/, '') }); return '\u0010' + (pre.length - 1) + '\u0010';
+  let t = esc(txt).replace(/\\\*/g, '*');
+  t = t.replace(/```(\w*)\n?([\s\S]*?)```/g, (m, l, c) => {
+    pre.push({ l: (l || 'texto').toLowerCase(), c: c.replace(/\n$/, ''), abierto: false });
+    return '\u0010' + (pre.length - 1) + '\u0010';
   });
+  const suelto = t.lastIndexOf('```');
+  if (suelto !== -1){
+    const cola = t.slice(suelto + 3).replace(/^\w*\n?/, '');
+    const len = (t.slice(suelto + 3).match(/^\w*/) || [''])[0].toLowerCase() || 'texto';
+    pre.push({ l: len, c: cola, abierto: true });
+    t = t.slice(0, suelto) + '\u0010' + (pre.length - 1) + '\u0010';
+  }
   t = t.replace(/^#{1,3} (.+)$/gm, '<h3>$1</h3>');
-  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/\*{3}([^*\n]+)\*{3}/g, '<strong>$1</strong>');
+  t = t.replace(/\*\*\s?([^*\n]+?)\s?\*\*/g, '<strong>$1</strong>');
   t = t.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
   t = t.replace(/`([^`\n]+)`/g, '<code class="en">$1</code>');
   t = t.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
@@ -224,7 +239,8 @@ function md(txt){
   t = t.split(/\n{2,}/).map(b => (/^\s*<(h3|ul|ol|blockquote)/.test(b.trim()) || /^\u0010/.test(b.trim())) ? b : '<p>' + b.replace(/\n/g, '<br>') + '</p>').join('');
   return t.replace(/\u0010(\d+)\u0010/g, (m, i) => {
     const p = pre[i];
-    return '<div class="caja"><div class="top"><span>' + p.l + '</span><button class="copiar" data-c="' + encodeURIComponent(p.c) + '">copiar</button></div><pre><code>' + resaltar(p.c, p.l) + '</code></pre></div>';
+    const cab = p.abierto ? 'código en vivo' : p.l;
+    return '<div class="caja"><div class="top"><span>' + cab + '</span><button class="copiar" data-c="' + encodeURIComponent(p.c) + '">copiar</button></div><pre><code>' + resaltar(p.c, p.l, liviano || p.abierto) + '</code></pre></div>';
   });
 }
 const guardar = () => localStorage.setItem('eros.convs', JSON.stringify(convs.slice(0, 40)));
@@ -259,7 +275,21 @@ function turno(rol, texto, animar = true){
   bajar();
   return cuerpo;
 }
-function bajar(forzar){ const h = $('#hilo'); if (forzar || h.scrollHeight - h.scrollTop - h.clientHeight < 180) h.scrollTop = h.scrollHeight; }
+let pegar = true;
+function bajar(forzar){
+  const h = $('#hilo');
+  if (forzar){ pegar = true; $('#irFinal').style.display = 'none'; h.scrollTop = h.scrollHeight; return; }
+  if (!pegar) return;
+  h.scrollTop = h.scrollHeight;
+}
+function revisarPegado(){
+  const h = $('#hilo');
+  const lejos = h.scrollHeight - h.scrollTop - h.clientHeight;
+  if (lejos < 30){ pegar = true; $('#irFinal').style.display = 'none'; }
+  else if (lejos > 90){ pegar = false; $('#irFinal').style.display = 'grid'; }
+}
+$('#hilo').addEventListener('scroll', revisarPegado, { passive:true });
+$('#irFinal').addEventListener('click', () => { pegar = true; $('#irFinal').style.display = 'none'; $('#hilo').scrollTop = $('#hilo').scrollHeight; });
 function aviso(t, ms = 5200){ const a = $('#aviso'); a.textContent = t; a.style.display = 'block'; clearTimeout(a._t); a._t = setTimeout(() => a.style.display='none', ms); }
 function franja(t){ const f = $('#franja'); if(!t){ f.style.display='none'; return; } f.textContent = t; f.style.display = 'block'; }
 
@@ -308,9 +338,7 @@ async function enviar(rehacer = false){
     const n = Math.max(3, Math.ceil(pendiente.length / 10));
     revelado += pendiente.slice(0, n);
     pendiente = pendiente.slice(n);
-    const ahora = performance.now();
-    if (ahora - ultimoMd > 380){ ultimoMd = ahora; destino.innerHTML = md(revelado); }
-    else destino.textContent = revelado;
+    destino.innerHTML = md(revelado, true);
     destino.classList.add('cursor');
     bajar();
     requestAnimationFrame(paso);
@@ -321,7 +349,7 @@ async function enviar(rehacer = false){
     const r = await fetch('/api/chat', {
       method:'POST', signal: ctrl.signal,
       headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ mensajes: c.mensajes.slice(-18), max_tokens: 8192 })
+      body: JSON.stringify({ mensajes: c.mensajes.slice(-18), max_tokens: 16000 })
     });
     if (!r.ok){
       const e = await r.json().catch(() => ({ detail:'error ' + r.status }));
