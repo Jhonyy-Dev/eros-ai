@@ -914,19 +914,38 @@ async def chat(req: Request, body: dict = Body(...)):
         cola = ""
         emitido = False
         completo = ""
+        visible = ""
+        resuelto = False
         if prefill:
             yield "data: " + json.dumps({"t": prefill}) + "\n\n"
+            visible = prefill
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
                 if "t" in ev:
                     completo += ev["t"]
+                    trozo = ev["t"]
+                    if prefill and not resuelto:
+                        # el modelo a veces repite la cerca que ya mandamos en el prefill
+                        if len(completo) < 3:
+                            trozo = ""
+                        elif completo.startswith("```"):
+                            corte = completo.find("\n")
+                            if corte < 0:
+                                trozo = ""
+                            else:
+                                trozo = completo[corte:]
+                                resuelto = True
+                        else:
+                            trozo = completo
+                            resuelto = True
+                    visible += trozo
                     if emitido:
-                        cola += ev["t"]
+                        cola += trozo
                         if len(cola) > 160:
                             yield "data: " + json.dumps({"t": cola[:-160]}) + "\n\n"
                             cola = cola[-160:]
                     else:
-                        buffer += ev["t"]
+                        buffer += trozo
                         if len(buffer) >= 48:
                             yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buffer))}) + "\n\n"
                             buffer = ""
@@ -943,7 +962,7 @@ async def chat(req: Request, body: dict = Body(...)):
                 elif "error" in ev:
                     amable = MENSAJES_AMABLES.get(ev.get("codigo"), "Hubo un problema con el modelo. Intenta otra vez.")
                     yield "data: " + json.dumps({"error": amable, "detalle": ev["error"]}) + "\n\n"
-            final_texto = (prefill + completo).strip()
+            final_texto = visible.strip()
             pura_muletilla = len(final_texto) < 45 and sin_muletilla(final_texto) == final_texto
             if buffer and not pura_muletilla:
                 yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buffer))}) + "\n\n"
@@ -954,14 +973,14 @@ async def chat(req: Request, body: dict = Body(...)):
                 yield "data: " + json.dumps({"t": arregla_ultima(cola)}) + "\n\n"
                 cola = ""
             if prefill:
-                todo = prefill + completo
+                todo = visible
                 if todo.count("```") % 2 == 1:
                     yield "data: " + json.dumps({"t": "\n```\n"}) + "\n\n"
             # respuesta sospechosamente corta para un pedido grande: se pide la ampliacion
-            if len((prefill + completo).strip()) < 1500 and (prefill or pide_manual(mensajes[-1]["content"])):
+            if len(visible.strip()) < 1500 and (prefill or pide_manual(mensajes[-1]["content"])):
                 extra = [{"role": "system", "content": PERSONA},
                          {"role": "user", "content": mensajes[-1]["content"]},
-                         {"role": "assistant", "content": (prefill + completo).strip()},
+                         {"role": "assistant", "content": visible.strip()},
                          {"role": "user", "content": "[quedó corta. Continuá y completá ahora: datos numéricos, "
                                                      "pasos numerados y errores típicos. Nada de encuadre legal.]"}]
                 if not pura_muletilla:
