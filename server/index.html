@@ -298,13 +298,24 @@ function bajar(forzar){
   if (!pegar) return;
   h.scrollTop = h.scrollHeight;
 }
+function soltar(){
+  if (!pegar) return;
+  pegar = false;
+  $('#irFinal').style.display = 'grid';
+}
 function revisarPegado(){
   const h = $('#hilo');
   const lejos = h.scrollHeight - h.scrollTop - h.clientHeight;
-  if (lejos < 30){ pegar = true; $('#irFinal').style.display = 'none'; }
-  else if (lejos > 90){ pegar = false; $('#irFinal').style.display = 'grid'; }
+  if (lejos <= 24){ if (!pegar){ pegar = true; $('#irFinal').style.display = 'none'; } }
+  else soltar();
 }
 $('#hilo').addEventListener('scroll', revisarPegado, { passive:true });
+// si el usuario tira hacia arriba se suelta solo, antes de que el automatico lo devuelva abajo
+$('#hilo').addEventListener('wheel', e => { if (e.deltaY < 0) soltar(); }, { passive:true });
+let toqueDesde = 0;
+$('#hilo').addEventListener('touchstart', () => { toqueDesde = $('#hilo').scrollTop; }, { passive:true });
+$('#hilo').addEventListener('touchmove', () => { if ($('#hilo').scrollTop < toqueDesde - 4) soltar(); },
+  { passive:true });
 $('#irFinal').addEventListener('click', () => { pegar = true; $('#irFinal').style.display = 'none'; $('#hilo').scrollTop = $('#hilo').scrollHeight; });
 function aviso(t, ms = 5200){ const a = $('#aviso'); if (!a) return; a.textContent = t; a.style.display = 'block'; clearTimeout(a._t); a._t = setTimeout(() => a.style.display='none', ms); }
 function franja(t){ const f = $('#franja'); if(!t){ f.style.display='none'; return; } f.textContent = t; f.style.display = 'block'; }
@@ -346,21 +357,31 @@ async function enviar(rehacer = false){
   ctrl = new AbortController();
   const destino = turno('assistant', '');
   destino.innerHTML = '<span class="puntos"><i></i><i></i><i></i></span>';
-  let acumulado = '', pendiente = '', revelado = '', ultimoMd = 0, animando = false;
-  const paso = () => {
-    if (!pendiente){
-      if (ultimoMd !== -1){ destino.innerHTML = md(revelado || acumulado); ultimoMd = -1; destino.classList.remove('cursor'); bajar(); }
-      animando = false; return;
-    }
-    const n = Math.max(3, Math.ceil(pendiente.length / 10));
-    revelado += pendiente.slice(0, n);
-    pendiente = pendiente.slice(n);
-    destino.innerHTML = md(revelado, true);
+  let acumulado = '', pendiente = '', revelado = '', animando = false;
+  let ultimoFrame = 0, ultimoPintado = 0, ultimaLlegada = 0;
+  const pintar = t => {
+    // durante la respuesta se pinta liviano (sin resaltado de sintaxis) y se cambia el html a lo sumo cada 45ms
+    destino.innerHTML = md(revelado || acumulado, true);
     destino.classList.add('cursor');
+    ultimoPintado = t;
     bajar();
-    requestAnimationFrame(paso);
   };
-  const empujar = t => { pendiente += t; if (!animando){ animando = true; requestAnimationFrame(paso); } };
+  const paso = ahora => {
+    const t = ahora || performance.now();
+    const dt = Math.min(64, Math.max(8, t - (ultimoFrame || t - 16)));
+    ultimoFrame = t;
+    if (pendiente){
+      // ritmo de tecleo parejo: termina el atraso en ~0.4s, nunca mas de 900 caracteres por segundo
+      const velocidad = Math.min(700, Math.max(120, pendiente.length / 0.55));
+      const n = Math.max(1, Math.round(velocidad * dt / 1000));
+      revelado += pendiente.slice(0, n);
+      pendiente = pendiente.slice(n);
+    }
+    if (revelado && (t - ultimoPintado >= 45 || (!pendiente && t - ultimoPintado > 20))) pintar(t);
+    if (pendiente || t - ultimaLlegada < 150) requestAnimationFrame(paso);
+    else animando = false;
+  };
+  const empujar = t => { pendiente += t; ultimaLlegada = performance.now(); if (!animando){ animando = true; requestAnimationFrame(paso); } };
   const terminar = () => new Promise(res => { const ver = () => (animando ? setTimeout(ver, 50) : res()); ver(); });
   try {
     const r = await fetch('/api/chat', {
@@ -392,6 +413,7 @@ async function enviar(rehacer = false){
     }
     await terminar();
     destino.classList.remove('cursor');
+    if (revelado) destino.innerHTML = md(revelado);   // un solo resaltado, al final
     if (acumulado){ c.mensajes.push({ role:'assistant', content: acumulado }); guardar(); pintarLista(); }
     else if (!c.mensajes.length || c.mensajes[c.mensajes.length-1].role !== 'assistant'){ c.mensajes.push({ role:'assistant', content:'(sin respuesta)' }); guardar(); }
   } catch(e){

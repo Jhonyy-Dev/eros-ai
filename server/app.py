@@ -148,6 +148,8 @@ def es_admin(req: Request) -> bool:
 
 # ---------------------------------------------------------------- llaves de invitacion
 
+RETENCION = max(8, int(CFG.get("COLA_RETENCION") or 48))
+
 ARCHIVO_LLAVES = DATOS / "llaves.json"
 
 
@@ -979,9 +981,9 @@ async def chat(req: Request, body: dict = Body(...)):
                     visible += trozo
                     if emitido:
                         cola += trozo
-                        if len(cola) > 160:
-                            yield "data: " + json.dumps({"t": cola[:-160]}) + "\n\n"
-                            cola = cola[-160:]
+                        if len(cola) > RETENCION:
+                            yield "data: " + json.dumps({"t": cola[:-RETENCION]}) + "\n\n"
+                            cola = cola[-RETENCION:]
                     else:
                         buffer += trozo
                         if len(buffer) >= 48:
