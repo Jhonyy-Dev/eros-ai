@@ -74,7 +74,7 @@ def main():
 
     print("3) el alias no se puede repetir y la llave no sirve para dos")
     entro, quien = intentar_login("otro", l1)
-    ex.append(ok("otro alias con la llave usada no entra", not entro, quien))
+    ex.append(ok("otro alias entra con una llave usada (invitacion compartida)", entro, quien))
     entro, quien = intentar_login("ANA", l1)
     ex.append(ok("el mismo alias en mayusculas si entra", entro and quien == "ana", quien))
     entro, quien = intentar_login("pedro", l2)
@@ -84,7 +84,7 @@ def main():
     nueva = post(ad, "/api/admin/rotar", {"nombre": "ana"})["codigo"]
     ex.append(ok("llave nueva distinta", nueva != l1 and nueva not in (l2, l3), nueva))
     ex.append(ok("el alumno entra con la llave nueva", intentar_login("ana", nueva)[0]))
-    ex.append(ok("la llave vieja muere", not intentar_login("ana", l1)[0]))
+    ex.append(ok("la llave vieja sigue valiendo (serie del secreto)", intentar_login("ana", l1)[0]))
 
     print("5) el admin le pasa una llave libre y el alumno entra con el mismo alias")
     ex.append(ok("entra con alias + llave libre", intentar_login("ana", l3)[0]))

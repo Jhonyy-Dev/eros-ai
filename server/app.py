@@ -77,46 +77,54 @@ def codigo_random(largo: int = 6) -> str:
 
 
 def archivo_alumnos() -> pathlib.Path:
-    return RAIZ / ".env"
+    """Tabla de alumnos que mantiene la app. La linea ALUMNOS del .env se respeta aparte."""
+    return DATOS / "alumnos.json"
 
 
-def alumnos() -> dict:
-    """nombre -> codigo. Se lee del .env en cada llamada, asi los cambios aplican al instante."""
+def _pares(crudo: str) -> dict:
     d = {}
-    archivo = archivo_alumnos()
-    crudo = ""
-    if archivo.exists():
-        for linea in archivo.read_text(encoding="utf-8-sig").splitlines():
-            if linea.strip().startswith("ALUMNOS="):
-                crudo = linea.split("=", 1)[1].strip()
-                break
-    if os.environ.get("ALUMNOS"):
-        crudo = os.environ["ALUMNOS"]
-    for par in crudo.split(","):
+    for par in (crudo or "").split(","):
         par = par.strip()
         if par and ":" in par:
             nombre, codigo = par.split(":", 1)
-            d[nombre.strip()] = codigo.strip()
+            if nombre.strip():
+                d[nombre.strip()] = codigo.strip()
     return d
 
 
-def guardar_alumnos(tabla: dict) -> None:
-    linea_nueva = "ALUMNOS=" + ",".join(n + ":" + c for n, c in tabla.items())
-    archivo = archivo_alumnos()
+def _alumnos_del_env() -> str:
+    archivo = RAIZ / ".env"
     if not archivo.exists():
-        archivo.write_text(linea_nueva + "\n", encoding="utf-8")
-        return
-    lineas = archivo.read_text(encoding="utf-8").splitlines()
-    salida, visto = [], False
-    for l in lineas:
-        if l.strip().startswith("ALUMNOS="):
-            salida.append(linea_nueva)
-            visto = True
-        else:
-            salida.append(l)
-    if not visto:
-        salida.append(linea_nueva)
-    archivo.write_text("\n".join(salida) + "\n", encoding="utf-8")
+        return ""
+    try:
+        for linea in archivo.read_text(encoding="utf-8-sig").splitlines():
+            if linea.strip().startswith("ALUMNOS="):
+                return linea.split("=", 1)[1].strip()
+    except Exception:
+        pass
+    return ""
+
+
+def alumnos() -> dict:
+    """nombre -> codigo. Mezcla la linea manual del .env, la tabla que mantiene la app y la variable de entorno."""
+    d = _pares(_alumnos_del_env())
+    archivo = archivo_alumnos()
+    if archivo.exists():
+        try:
+            d.update(json.loads(archivo.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    d.update(_pares(os.environ.get("ALUMNOS", "")))
+    return {n: c for n, c in d.items() if n}
+
+
+def guardar_alumnos(tabla: dict) -> None:
+    archivo = archivo_alumnos()
+    archivo.parent.mkdir(parents=True, exist_ok=True)
+    tmp = archivo.with_suffix(".tmp")
+    tmp.write_text(json.dumps({n: c for n, c in tabla.items() if n}, ensure_ascii=False, indent=1),
+                   encoding="utf-8")
+    tmp.replace(archivo)
 
 
 def firmar_admin() -> str:
@@ -130,6 +138,25 @@ def es_admin(req: Request) -> bool:
 # ---------------------------------------------------------------- llaves de invitacion
 
 ARCHIVO_LLAVES = DATOS / "llaves.json"
+
+
+def _sembrar_datos() -> None:
+    """En la nube el disco es efimero: si falta, restaura los datos que viajan junto al codigo."""
+    origen = RAIZ / "datos"
+    if DATOS == origen.resolve() or not origen.is_dir():
+        return
+    DATOS.mkdir(parents=True, exist_ok=True)
+    for nombre in ("llaves.json", "uso.json", "alumnos.json"):
+        destino = DATOS / nombre
+        fuente = origen / nombre
+        if not destino.exists() and fuente.exists():
+            try:
+                destino.write_text(fuente.read_text(encoding="utf-8"), encoding="utf-8")
+            except Exception:
+                pass
+
+
+_sembrar_datos()
 
 
 def leer_llaves() -> dict:
@@ -151,13 +178,24 @@ def guardar_llaves(d: dict) -> None:
 
 
 def crear_llaves(cuantas: int) -> list:
+    """Primero reparte la serie (estable ante borrados del disco) y despues codigos al azar."""
     llaves = leer_llaves()
+    usadas = set(alumnos().values())
     nuevas = []
+    sello = lambda: {"alumno": None, "creada": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    for i in range(int(CFG.get("LLAVES_SERIE") or 400)):
+        if len(nuevas) >= cuantas:
+            break
+        codigo = codigo_serie(i)
+        if codigo in llaves or codigo in usadas:
+            continue
+        llaves[codigo] = sello()
+        nuevas.append(codigo)
     while len(nuevas) < cuantas:
         codigo = codigo_random()
-        if codigo in llaves or codigo in alumnos().values():
+        if codigo in llaves or codigo in usadas:
             continue
-        llaves[codigo] = {"alumno": None, "creada": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        llaves[codigo] = sello()
         nuevas.append(codigo)
     guardar_llaves(llaves)
     return nuevas
@@ -185,11 +223,40 @@ def misma(a: str, b: str) -> bool:
     return (a or "").strip().lower() == (b or "").strip().lower()
 
 
+def codigo_serie(i: int) -> str:
+    """Llave derivada del SESSION_SECRET: sigue valiendo aunque el hosting borre el disco."""
+    abc = "abcdefghijkmnpqrstuvwxyz23456789"
+    crudo = hmac.new(SECRETO, ("eros-llave-%d" % i).encode(), hashlib.sha256).digest()
+    return "".join(abc[crudo[j] % len(abc)] for j in range(6))
+
+
+_SERIE = {}
+
+
+def llave_de_serie(codigo: str):
+    """Indice de la llave dentro de la serie, o None si no es de la serie."""
+    c = (codigo or "").strip().lower()
+    if len(c) != 6:
+        return None
+    if not _SERIE:
+        for i in range(int(CFG.get("LLAVES_SERIE") or 400)):
+            _SERIE[codigo_serie(i)] = i
+    return _SERIE.get(c)
+
+
 def llave_real(codigo: str):
     """Devuelve la llave tal cual figura, comparando sin importar mayusculas."""
+    codigo = (codigo or "").strip()
     for c in leer_llaves():
         if misma(c, codigo):
             return c
+    if llave_de_serie(codigo) is not None:
+        llaves = leer_llaves()
+        llaves[codigo.lower()] = {"alumno": None,
+                                  "creada": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                  "serie": True}
+        guardar_llaves(llaves)
+        return codigo.lower()
     return None
 
 
@@ -465,18 +532,17 @@ async def entrar(req: Request):
 
     # 2) llave libre: registra el alias nuevo, o re-vincula una llave nueva al mismo alias (rotacion)
     codigo_real = llave_real(codigo)
-    if codigo_real and llaves[codigo_real].get("alumno") is None:
-        codigo = codigo_real
+    if codigo_real:
         if real:
-            vieja = tabla[real]
-            tabla[real] = codigo
-            guardar_alumnos(tabla)
-            liberar_llave(vieja)
+            vieja = tabla.get(real)
+            if not misma(vieja or "", codigo_real):
+                tabla[real] = codigo_real
+                liberar_llave(vieja or "")
         else:
-            tabla[alias] = codigo
-            guardar_alumnos(tabla)
+            tabla[alias] = codigo_real
             real = alias
-        marcar_llave(codigo, real)
+        guardar_alumnos(tabla)
+        marcar_llave(codigo_real, real)
         return _entrar_como(real)
 
     # 3) alias tomado por otro
@@ -556,7 +622,11 @@ async def admin_cuenta(req: Request, body: dict = Body(...)):
     usuario = str(body.get("usuario") or "").strip()
     clave = str(body.get("clave") or "").strip()
     archivo = RAIZ / ".env"
-    lineas = archivo.read_text(encoding="utf-8").splitlines()
+    archivo.parent.mkdir(parents=True, exist_ok=True)
+    lineas = archivo.read_text(encoding="utf-8").splitlines() if archivo.exists() else []
+    for k, v in (("ADMIN_USER=", usuario), ("ADMIN_CLAVE=", clave)):
+        if v and not any(l.startswith(k) for l in lineas):
+            lineas.append(k + v)
     salida = []
     for l in lineas:
         if l.startswith("ADMIN_USER=") and usuario:
