@@ -35,6 +35,14 @@ ARCHIVO_TUNEL = pathlib.Path(os.environ.get("LOGS_DIR") or (RAIZ / "logs")) / "t
 PERSONA = (RAIZ / "config" / "personas" / "eros.txt").read_text(encoding="utf-8").strip()
 
 
+def limpio_valor(txt: str) -> str:
+    """Saca lo invisible que se cuela al pegar una clave en un formulario de hosting."""
+    txt = (txt or "")
+    for basura in ("\ufeff", "\u200b", "\u200c", "\u200d"):
+        txt = txt.replace(basura, "")
+    return txt.replace("\u00a0", " ").strip().strip('"').strip("'").strip()
+
+
 def cargar_env() -> dict:
     cfg = {}
     archivo = RAIZ / ".env"
@@ -57,6 +65,9 @@ def cargar_env() -> dict:
 
 
 CFG = cargar_env()
+for _clave in ("ADMIN_USER", "ADMIN_CLAVE"):
+    if CFG.get(_clave):
+        CFG[_clave] = limpio_valor(CFG[_clave])
 SECRETO = (CFG.get("SESSION_SECRET") or "eros-secreto").encode()
 COOKIE = "eros_sesion"
 COOKIE_ADMIN = "eros_admin"
@@ -508,8 +519,8 @@ def estatico(nombre: str):
 @app.post("/login")
 async def entrar(req: Request):
     datos = parse_qs((await req.body()).decode("utf-8", "ignore"))
-    alias = (datos.get("nombre") or [""])[0].strip()
-    codigo = (datos.get("codigo") or [""])[0].strip()
+    alias = limpio_valor((datos.get("nombre") or [""])[0])
+    codigo = limpio_valor((datos.get("codigo") or [""])[0])
     if not alias or not codigo:
         return RedirectResponse("/login?error=falta", status_code=303)
 
@@ -593,9 +604,14 @@ def vista_admin(req: Request):
 @app.post("/admin/entrar")
 async def admin_entrar(req: Request):
     datos = parse_qs((await req.body()).decode("utf-8", "ignore"))
-    usuario = (datos.get("usuario") or [""])[0].strip().lower()
-    clave = (datos.get("clave") or [""])[0].strip()
-    if usuario != (CFG.get("ADMIN_USER") or "profe").lower() or clave != (CFG.get("ADMIN_CLAVE") or ""):
+    usuario = limpio_valor((datos.get("usuario") or [""])[0])
+    clave = limpio_valor((datos.get("clave") or [""])[0])
+    tabla = alumnos()
+    real = next((n for n in tabla if misma(n, CFG.get("ADMIN_USER") or "")), None)
+    clave_rescate = tabla.get(real) if real else ""
+    user_ok = misma(usuario, CFG.get("ADMIN_USER") or "profe")
+    clave_ok = bool(clave) and (misma(clave, CFG.get("ADMIN_CLAVE") or "") or misma(clave, clave_rescate))
+    if not user_ok or not clave_ok:
         return RedirectResponse("/admin?error=1", status_code=303)
     r = RedirectResponse("/panel", status_code=303)
     r.set_cookie(COOKIE_ADMIN, firmar_admin(), httponly=True, samesite="lax", max_age=60 * 60 * 24 * 90)
@@ -619,8 +635,8 @@ def admin_a_chat(req: Request):
 async def admin_cuenta(req: Request, body: dict = Body(...)):
     """Cambia usuario y clave del panel."""
     solo_admin(req)
-    usuario = str(body.get("usuario") or "").strip()
-    clave = str(body.get("clave") or "").strip()
+    usuario = limpio_valor(str(body.get("usuario") or ""))
+    clave = limpio_valor(str(body.get("clave") or ""))
     archivo = RAIZ / ".env"
     archivo.parent.mkdir(parents=True, exist_ok=True)
     lineas = archivo.read_text(encoding="utf-8").splitlines() if archivo.exists() else []
@@ -823,6 +839,28 @@ def estado(req: Request):
         "url_publica": url_publica(),
         "alumnos_configurados": len(alumnos()),
         "fase_api_keys": (CFG.get("ENABLE_STUDENT_API_KEYS", "false").lower() == "true"),
+    }
+
+
+@app.get("/api/diag")
+def diag(req: Request):
+    """Que credenciales de admin tiene cargadas el servidor, sin revelar la clave."""
+    clave = CFG.get("ADMIN_CLAVE") or ""
+    usuario = CFG.get("ADMIN_USER") or ""
+    tabla = alumnos()
+    real = next((n for n in tabla if misma(n, usuario)), None)
+    return {
+        "usuario_admin": usuario,
+        "clave_largo": len(clave),
+        "clave_inicio": clave[:3],
+        "clave_fin": clave[-2:],
+        "clave_sin_basura": clave == limpio_valor(clave),
+        "coincide_con_prueba123": misma(clave, "Prueba123@"),
+        "clave_de_rescate_en_alumnos": (tabla.get(real) if real else ""),
+        "alumnos_configurados": len(tabla),
+        "backend": CFG.get("BACKEND") or "openrouter",
+        "modelo": models.activo(CFG)["visible"],
+        "datos_dir": str(DATOS),
     }
 
 
