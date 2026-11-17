@@ -901,6 +901,9 @@ def diag(req: Request):
         "backend": CFG.get("BACKEND") or "openrouter",
         "modelo": models.activo(CFG)["visible"],
         "datos_dir": str(DATOS),
+        "retencion": RETENCION,
+        "cierres_limpios": len(CIERRES_PREGUNTA),
+        "titubeos": len(HEDGES),
     }
 
 
