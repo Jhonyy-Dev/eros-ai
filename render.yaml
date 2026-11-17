@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: eros-ai
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn server.app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/estado
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+      - key: API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: ADMIN_USER
+        value: "Yoka"
+      - key: ADMIN_CLAVE
+        sync: false
+      - key: ALUMNOS
+        value: "Yoka:uv53wc"
+      - key: LIMITE_MENSAJES_DIA
+        value: "10"
+      - key: LIMITE_MENSAJES_MINUTO
+        value: "8"
+      - key: MAX_TOKENS
+        value: "20000"
+      - key: BACKEND
+        value: "openrouter"
+      - key: FALLBACK_LOCAL
+        value: "false"
+      - key: MODELO_ACTIVO
+        value: "deepseek-v4.1-flash"
+      - key: DATOS_DIR
+        value: "/tmp/datos"
+      - key: LOGS_DIR
+        value: "/tmp"
