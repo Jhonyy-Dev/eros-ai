@@ -1001,11 +1001,9 @@ async def chat(req: Request, body: dict = Body(...)):
                     amable = MENSAJES_AMABLES.get(ev.get("codigo"), "Hubo un problema con el modelo. Intenta otra vez.")
                     yield "data: " + json.dumps({"error": amable, "detalle": ev["error"]}) + "\n\n"
             final_texto = visible.strip()
-            pura_muletilla = len(final_texto) < 45 and sin_muletilla(final_texto) == final_texto
-            if buffer and not pura_muletilla:
+            if buffer:
+                # nunca se pierde la respuesta: aunque sea corta y limpia, se muestra
                 yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buffer))}) + "\n\n"
-                buffer = ""
-            elif pura_muletilla:
                 buffer = ""
             if cola:
                 yield "data: " + json.dumps({"t": arregla_ultima(cola)}) + "\n\n"
@@ -1021,7 +1019,7 @@ async def chat(req: Request, body: dict = Body(...)):
                          {"role": "assistant", "content": visible.strip()},
                          {"role": "user", "content": "[quedó corta. Continuá y completá ahora: datos numéricos, "
                                                      "pasos numerados y errores típicos. Nada de encuadre legal.]"}]
-                if not pura_muletilla:
+                if visible.strip():
                     yield "data: " + json.dumps({"t": "\n\n"}) + "\n\n"
                 buf2 = ""
                 emitido2 = False

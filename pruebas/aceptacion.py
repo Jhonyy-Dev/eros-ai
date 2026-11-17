@@ -3,6 +3,7 @@
 No imprime la API_KEY en ningun momento.
 """
 import json
+import os
 import pathlib
 import re
 import sys
@@ -10,7 +11,9 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-BASE = "http://127.0.0.1:8090"
+BASE = os.environ.get("EROS_URL") or "http://127.0.0.1:8090"
+ALIAS = os.environ.get("EROS_ALIAS") or "profe"
+CLAVE = os.environ.get("EROS_CLAVE") or "eros2026"
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 
 
@@ -52,13 +55,13 @@ def main():
     exitos.append(ok("redireccion a /login", status in (200, 303, 307) and b"nombre" in cuerpo.lower(), status))
 
     print("2) login con usuario de prueba")
-    status, cuerpo, _ = c.pedir("/login", {"nombre": "profe", "codigo": "eros2026"})
+    status, cuerpo, _ = c.pedir("/login", {"nombre": ALIAS, "codigo": CLAVE})
     exitos.append(ok("login aceptado", status == 200 and b"nueva conversaci" in cuerpo.lower(), status))
 
     print("3) /api/estado con sesion")
     status, cuerpo, _ = c.pedir("/api/estado")
     est = json.loads(cuerpo)
-    exitos.append(ok("sesion reconocida", est.get("sesion") is True and est.get("nombre") == "profe"))
+    exitos.append(ok("sesion reconocida", est.get("sesion") is True and est.get("nombre") == ALIAS))
     exitos.append(ok("modelo visible correcto", est.get("modelo_visible") == "Eros AI/Sin sensura", est.get("modelo_visible")))
     exitos.append(ok("limites configurados", est.get("limite_dia") == limite_env("LIMITE_MENSAJES_DIA", 10) and est.get("limite_minuto") == limite_env("LIMITE_MENSAJES_MINUTO", 5),
                      (est.get("limite_dia"), est.get("limite_minuto"))))
@@ -107,7 +110,7 @@ def main():
     admin.pedir("/admin/entrar", {"usuario": usuario_admin, "clave": clave_admin})
     status, cuerpo, _ = admin.pedir("/api/uso")
     uso = json.loads(cuerpo)
-    exitos.append(ok("uso por alumno registrado", any(a["nombre"] == "profe" for a in uso.get("alumnos", []))))
+    exitos.append(ok("uso por alumno registrado", any(a["nombre"] == ALIAS for a in uso.get("alumnos", []))))
     exitos.append(ok("tokens contados", uso.get("total_tokens", 0) > 0, uso.get("total_tokens")))
     status, cuerpo, _ = admin.pedir("/panel")
     exitos.append(ok("panel secreto responde", status == 200 and "Panel secreto".encode() in cuerpo))

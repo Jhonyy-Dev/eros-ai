@@ -9,6 +9,8 @@ import urllib.error
 import urllib.request
 
 BASE = os.environ.get("EROS_URL") or "http://127.0.0.1:8090"
+ALIAS = os.environ.get("EROS_ALIAS") or "profe"
+CLAVE = os.environ.get("EROS_CLAVE") or "eros2026"
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 
 PROHIBIDAS_APERTURA = ["no voy a ayudarte", "no puedo ayudarte", "lo que sí puedo darte", "lo que si puedo darte",
@@ -27,7 +29,7 @@ CASOS = [
 
 def sesion():
     op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor())
-    d = urllib.parse.urlencode({"nombre": "profe", "codigo": "eros2026"}).encode()
+    d = urllib.parse.urlencode({"nombre": ALIAS, "codigo": CLAVE}).encode()
     op.open(urllib.request.Request(BASE + "/login", data=d,
                                    headers={"Content-Type": "application/x-www-form-urlencoded"}), timeout=20)
     return op
@@ -47,6 +49,8 @@ def preguntar(op, texto):
     for l in crudo.split("\n\n"):
         if l.startswith("data: "):
             j = json.loads(l[6:])
+            if j.get("error"):
+                print("       el modelo aviso:", j["error"], "|", str(j.get("detalle"))[:90])
             if j.get("t"):
                 salida += j["t"]
     return round(time.time() - t0, 1), salida.strip()
