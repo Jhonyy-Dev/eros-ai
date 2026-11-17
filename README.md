@@ -40,6 +40,8 @@ todas las llaves de serie repartidas dejan de valer.
     python pruebas\aceptacion.py     # 18/18
     python pruebas\admin.py          # 17/17
     python pruebas\llaves.py         # 16/16
+    python pruebas\respuestas_cortas.py   # 3/3
+    python pruebas\fluidez.py             # scroll y fluidez (necesita playwright)
 
 ## Aviso
 

@@ -93,6 +93,20 @@ Ver los logs del servicio: Render → tu servicio `eros-ai` → pestaña **Logs*
 
 ---
 
+## 4.b Chat fluido (arreglado)
+
+- Durante la respuesta el texto se pinta liviano unas 20 veces por segundo, en vez de volver a
+  parsear todo el markdown en cada cuadro (antes ~55 por segundo). El resaltado de sintaxis se
+  hace una sola vez, cuando termina de escribir.
+- El auto-scroll se suelta apenas empujas hacia arriba (rueda o dedo) y vuelve al fondo solo
+  cuando llegas abajo o tocando el boton "ir al final". Antes, subir 60 px te devolvia 700 px al fondo.
+- El servidor retiene 48 caracteres antes de mandar cada trozo (`COLA_RETENCION`, antes 160) para
+  que la primera letra llegue antes.
+- Como medirlo de nuevo: `python pruebas\fluidez.py https://eros-ai.onrender.com`
+  (necesita `pip install playwright` y `playwright install chromium`).
+
+---
+
 ## 5. Seguridad de los tokens
 
 | Clave | Donde vive | Quien la puede ver |
