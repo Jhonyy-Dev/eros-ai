@@ -1,8 +1,9 @@
 .env
-bin/
-logs/
-datos/
+/bin/
+/logs/
+/datos/
 *.log
 *.tmp
 __pycache__/
 *.pyc
+/atack.mp4
