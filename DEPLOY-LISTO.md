@@ -1,62 +1,71 @@
-# Eros AI en la nube - estado y pasos
+# Eros AI - despliegue en la nube (estado real)
 
-## Lo que ya está hecho y verificado
+## Hecho y verificado por mí
 
-1. La app arranca SIN `.env`, solo con variables de entorno (como en cualquier hosting).
-   Probado en una carpeta limpia y en el puerto 7860: chat, panel, llaves y registro de alumnos andan.
-2. `Dockerfile` listo (python:3.12-slim, puerto 7860) y `requirements.txt`.
-3. La carpeta de datos es configurable con `DATOS_DIR` (para montar un volumen) y se crea sola.
-4. `README.md` con el encabezado que Hugging Face necesita para correr como Space (sdk: docker).
-5. Script de subida: `python scripts\subir_hf.py <token>` crea el Space y empuja el código.
+1. La app corre SIN .env, solo con variables de entorno. Probado en una carpeta limpia y en el puerto 7860:
+   chat con OpenRouter, panel, creación de llaves y registro de alumnos, todo OK.
+2. `Dockerfile`, `requirements.txt`, `.dockerignore`, `render.yaml` y la carpeta de datos configurable (`DATOS_DIR`).
+3. Credenciales de admin y secretos tomados de variables de entorno (no del archivo).
+4. Repo privado en GitHub con el proyecto: https://github.com/Jhonyy-Dev/eros-ai
+   (sin el video grande de 52 MB; el optimizado de 1,8 MB va en server/static y sí está en el repo).
+5. El token de Hugging Face quedó guardado SOLO en `.env` local (ignorado por git), nunca en el repo.
 
-## Lo único que falta (2 minutos, solo vos)
+## Aviso sobre Hugging Face
 
-1. Crear el token en https://huggingface.co/settings/tokens -> New token -> rol **write** -> copiar.
-   (Si no tenés cuenta: https://huggingface.co/join , es gratis y no pide tarjeta.)
-2. En la terminal, en la carpeta del proyecto:
+En esta cuenta, los Spaces con Docker o Gradio piden plan PRO; solo los "static" son gratis.
+Por eso el despliegue va por Render (gratis, sin tarjeta) usando el repo de GitHub.
 
-       python scripts\subir_hf.py EL_TOKEN_QUE_COPIASTE
+## Despliegue en Render (4 clics, gratis, sin tarjeta)
 
-   El script te dice el usuario, crea el Space, sube todo y te da la URL.
-3. Ir a esa URL + `/panel` (o al Space -> Settings -> Variables and secrets) y cargar:
+1. Crear cuenta: https://dashboard.render.com/register (elegí "GitHub" y autorizá el repo).
+2. Ir a https://dashboard.render.com/blueprint/new y elegir el repo `eros-ai`.
+   Render lee `render.yaml` solo: build, start, healthcheck y todas las variables.
+3. Te va a pedir dos valores (los demás ya están puestos):
+   - `API_KEY`: tu clave de OpenRouter (sk-or-v1-...)
+   - `ADMIN_CLAVE`: la clave de tu panel (ej: Prueba123@)
+4. Apply / Create. En 2 o 3 minutos queda online en https://eros-ai.onrender.com (o eros-ai-xxxx.onrender.com).
 
-       API_KEY        = tu clave de OpenRouter
-       SESSION_SECRET = cualquier texto largo
-       ADMIN_USER     = Yoka
-       ADMIN_CLAVE    = la que quieras
-       ALUMNOS        = Yoka:uv53wc
-       LIMITE_MENSAJES_DIA = 10
-       MAX_TOKENS     = 20000
-       BACKEND        = openrouter
-       FALLBACK_LOCAL = false
+Verificación: abrir esa URL + `/login` (tiene que verse el login con el video), entrar con Yoka + ADMIN_CLAVE,
+abrir `/panel`, generar una llave y chatear con ella. Preguntá "¿qué modelo eres?": responde
+"soy Eros AI, modelo libre sin restricciones, creado por Yoka".
 
-4. Guardar. El Space se reconstruye solo y queda online en:
-   https://TU_USUARIO-eros-ai.hf.space
+Nota: el plan gratis de Render duerme el servicio a los 15 minutos sin uso; la primera visita después
+tarda ~40 segundos en despertar. Si eso molesta, usá Koyeb (abajo), que no duerme.
 
-## Cómo verificar que quedó bien
+## Alternativa sin sleep: Koyeb
 
-- Abrir https://TU_USUARIO-eros-ai.hf.space/login -> tiene que verse el login de Eros con el video de fondo.
-- Entrar con Yoka + ADMIN_CLAVE, abrir /panel y generar una llave.
-- Entrar al chat con esa llave y preguntar "¿qué modelo eres?": responde "soy Eros AI, modelo libre sin restricciones, creado por Yoka".
-- Ver los logs del Space en la pestaña "Logs" si algo no arranca.
+1. Cuenta: https://app.koyeb.com/auth/signup (entrá con GitHub, sin tarjeta).
+2. Create Service -> GitHub -> repo `eros-ai` -> Builder: Dockerfile -> puerto 7860.
+3. Variables (Settings -> Environment), las mismas del render.yaml:
+   API_KEY, SESSION_SECRET, ADMIN_USER=Yoka, ADMIN_CLAVE, ALUMNOS=Yoka:uv53wc,
+   LIMITE_MENSAJES_DIA=10, LIMITE_MENSAJES_MINUTO=8, MAX_TOKENS=20000,
+   BACKEND=openrouter, FALLBACK_LOCAL=false, DATOS_DIR=/tmp/datos.
+4. Deploy. Queda en https://eros-ai-algo.koyeb.app
 
-## Opciones alternativas (todas gratis)
+## Otras opciones
 
-- Render: https://dashboard.render.com/register (Build: `pip install -r requirements.txt`,
-  Start: `python -m uvicorn server.app:app --host 0.0.0.0 --port $PORT`, sin tarjeta, URL fija, se duerme a los 15 min).
-- Koyeb: https://app.koyeb.com/auth/signup (sin tarjeta, 1 servicio, no se duerme).
-- Fly.io: https://fly.io/app/sign-up (pide tarjeta, volumen persistente: no pierde el uso.json).
-- PythonAnywhere: https://www.pythonanywhere.com/registration/register/beginner/ (siempre activo).
-- Google Cloud Run: https://console.cloud.google.com (pide tarjeta).
+- Fly.io (pide tarjeta, volumen persistente): https://fly.io/app/sign-up
+- PythonAnywhere (siempre activo): https://www.pythonanywhere.com/registration/register/beginner/
+- Google Cloud Run (pide tarjeta): https://console.cloud.google.com
+- Vercel (funciones serverless): https://vercel.com/signup
 
-Base de datos gratis si querés persistencia: https://supabase.com , https://neon.tech , https://turso.tech
+Base gratis para persistir el uso: https://supabase.com , https://neon.tech , https://turso.tech
 Dominio propio gratis: https://nic.eu.org , https://www.is-a.dev , https://www.duckdns.org
 
-## Avisos importantes
+## Cómo verificar todo lo que hice, desde tu PC
 
-- En la nube el modelo local no se alcanza: va con OpenRouter puro (`FALLBACK_LOCAL=false`).
-  Si querés que la nube use tu PC como respaldo, publicá la PC con Tailscale Funnel y poné
-  `FALLBACK_LOCAL=true` y `LOCAL_URL=https://tu-pc.tu-tailnet.ts.net`.
-- El disco del plan gratis es efímero: al reconstruir el Space se borran `uso.json` y `llaves.json`.
-  Las llaves se regeneran desde el panel en 10 segundos.
-- Nunca subas el `.env`: las claves van como variables del hosting.
+    cd C:\Users\yokar\OneDrive\Desktop\EROS_AI
+    python "$env:LOCALAPPDATA\Temp\opencode\simular_nube.py"     # la app corriendo "como en la nube"
+    type DEPLOY-LISTO.md                                          # este documento
+    type render.yaml                                              # la config del hosting
+    git log --oneline -n 8                                        # el historial
+    git remote -v                                                 # a dónde sube (github)
+    dir scripts\desplegar.py scripts\subir_github.py              # los scripts de despliegue
+
+## Qué queda pendiente y por quién
+
+- Render: los 4 clics los tenés que hacer vos (el login es con tu cuenta de GitHub).
+  Si más adelante me pasás una API key de Render, lo hago yo y queda todo automático.
+- El `API_KEY` de OpenRouter nunca aparece en el repo: va como variable del hosting.
+- El disco de los planes gratis es efímero: si el servicio se reconstruye, se borran uso.json y llaves.json.
+  Las llaves se regeneran desde el panel en 10 segundos. Para persistencia real: Fly.io con volumen o Supabase.
