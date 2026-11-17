@@ -1,0 +1,8 @@
+.env
+bin/
+logs/
+datos/
+*.log
+*.tmp
+__pycache__/
+*.pyc

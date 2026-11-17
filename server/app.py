@@ -29,8 +29,9 @@ if str(RAIZ) not in sys.path:
 from config import models          # noqa: E402
 from motor import llm              # noqa: E402
 
-ARCHIVO_USO = RAIZ / "datos" / "uso.json"
-ARCHIVO_TUNEL = RAIZ / "logs" / "tunnel.log"
+DATOS = pathlib.Path(os.environ.get("DATOS_DIR") or (RAIZ / "datos")).resolve()
+ARCHIVO_USO = DATOS / "uso.json"
+ARCHIVO_TUNEL = pathlib.Path(os.environ.get("LOGS_DIR") or (RAIZ / "logs")) / "tunnel.log"
 PERSONA = (RAIZ / "config" / "personas" / "eros.txt").read_text(encoding="utf-8").strip()
 
 
@@ -48,7 +49,7 @@ def cargar_env() -> dict:
     for k in ("API_KEY", "MODELO_ACTIVO", "BACKEND", "FALLBACK_LOCAL", "OPENROUTER_URL", "HTTP_REFERER",
               "MAX_TOKENS", "MAX_MENSAJES_CONTEXTO", "MAX_TOKENS_CONTEXTO", "LIMITE_MENSAJES_DIA",
               "LIMITE_MENSAJES_MINUTO", "ALUMNOS", "SESSION_SECRET", "PUERTO", "LOCAL_URL", "LOCAL_KEY",
-              "ENABLE_STUDENT_API_KEYS"):
+              "ENABLE_STUDENT_API_KEYS", "ADMIN_USER", "ADMIN_CLAVE"):
         v = os.environ.get(k)
         if v:
             cfg[k] = v
@@ -61,6 +62,7 @@ COOKIE = "eros_sesion"
 COOKIE_ADMIN = "eros_admin"
 
 app = FastAPI(title="Eros")
+DATOS.mkdir(parents=True, exist_ok=True)
 
 MENSAJES_AMABLES = {
     402: "El servicio está en mantenimiento, intenta más tarde.",
@@ -127,7 +129,7 @@ def es_admin(req: Request) -> bool:
 
 # ---------------------------------------------------------------- llaves de invitacion
 
-ARCHIVO_LLAVES = RAIZ / "datos" / "llaves.json"
+ARCHIVO_LLAVES = DATOS / "llaves.json"
 
 
 def leer_llaves() -> dict:
@@ -924,6 +926,7 @@ async def chat(req: Request, body: dict = Body(...)):
 
 if __name__ == "__main__":
     import os
-    host = os.environ.get("HOST", "127.0.0.1")
+    DATOS.mkdir(parents=True, exist_ok=True)
+    host = os.environ.get("HOST", "0.0.0.0")
     puerto = int(os.environ.get("PORT") or CFG.get("PUERTO") or 8090)
     uvicorn.run(app, host=host, port=puerto, log_level="warning")
