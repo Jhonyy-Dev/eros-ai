@@ -37,3 +37,5 @@ services:
         value: "/tmp/datos"
       - key: LOGS_DIR
         value: "/tmp"
+      - key: LLAVES_SERIE
+        value: "400"
