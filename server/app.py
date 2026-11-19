@@ -157,7 +157,7 @@ def es_admin(req: Request) -> bool:
 
 # ---------------------------------------------------------------- llaves de invitacion
 
-RETENCION = max(8, int(CFG.get("COLA_RETENCION") or 200))
+RETENCION = max(8, int(CFG.get("COLA_RETENCION") or 100))
 
 ARCHIVO_LLAVES = DATOS / "llaves.json"
 
@@ -1062,7 +1062,7 @@ async def chat(req: Request, body: dict = Body(...)):
                         if not cabe:
                             continue
                         suelto = (("\n" in cabe or len(cabe) >= 140) if prefill
-                                   else (("\n" in cabe and len(cabe) >= 24) or len(cabe) >= 140))
+                                   else (("\n" in cabe and len(cabe) >= 24) or len(cabe) >= 60))
                         if not suelto:
                             continue
                         if prefill and not cabe.startswith("```"):

@@ -42,4 +42,4 @@ services:
       - key: LLAVES_SERIE
         value: "400"
       - key: COLA_RETENCION
-        value: "48"
+        value: "100"
