@@ -575,6 +575,26 @@ def saca_muletilla_inicial(texto: str) -> str:
     return t
 
 
+PISTAS_CORTO = ("corto", "cortas", "breve", "una linea", "1 linea", "2 lineas", "3 lineas",
+                "en 2 palabras", "en 3 palabras", "en 5 palabras", "solo el nombre", "sin detalle",
+                "sin explayarte", "al grano")
+
+def pide_corto(texto: str) -> bool:
+    t = (texto or "").lower()
+    return any(p in t for p in PISTAS_CORTO)
+
+
+def respuesta_floja(texto: str) -> bool:
+    """True si la respuesta es corta o arranca titubeando (el modelo se quedo en el encuadre)."""
+    t = (texto or "").strip()
+    if not t or len(t) > 1200:
+        return False
+    bajo = t.lower()
+    titubeos = sum(1 for m in ("no puedo", "no voy a", "no existe", "no doy", "no tengo",
+                               "si lo que", "si tu caso", "si es que", "depende", "podria") if m in bajo)
+    return len(t) < 420 or titubeos >= 2
+
+
 def es_muletilla_sola(texto: str) -> bool:
     """True si la respuesta entera es solo la muletilla de apertura (el modelo se quedo callado)."""
     t = (texto or "").strip().lower().rstrip(". ")
@@ -1178,6 +1198,27 @@ async def chat(req: Request, body: dict = Body(...)):
                 trozos.append("data: " + json.dumps({"t": salida_txt}) + "\n\n")
             return trozos
 
+        async def rehacer(nota: str):
+            """Pide la respuesta otra vez y la manda como reemplazo (el cliente borra la anterior)."""
+            nonlocal visible, entrada, salida, costo
+            extra = [{"role": "system", "content": PERSONA},
+                     {"role": "user", "content": mensajes[-1]["content"]},
+                     {"role": "assistant", "content": visible.strip()},
+                     {"role": "user", "content": nota}]
+            nuevo = ""
+            async for ev2 in llm.stream_con_respaldo(extra, CFG, max_tokens=max_tokens):
+                if "uso" in ev2:
+                    entrada += ev2["uso"].get("entrada", 0)
+                    salida += ev2["uso"].get("salida", 0)
+                    costo += ev2["uso"].get("costo", 0.0)
+                nuevo += ev2.get("t") or ""
+            nuevo = sin_meta(nuevo).strip()
+            if prefill and not nuevo.startswith("```"):
+                nuevo = prefill + nuevo
+            if nuevo.strip():
+                visible = nuevo
+                yield "data: " + json.dumps({"reemplazo": arregla_cercas(saca_muletilla_inicial(nuevo))}) + "\n\n"
+
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
                 if "t" in ev:
@@ -1258,6 +1299,14 @@ async def chat(req: Request, body: dict = Body(...)):
             if len(visible.strip()) < 1500 and (prefill or pide_manual(mensajes[-1]["content"])):
                 for t in await pedir_mas("[quedó corta. Continuá y completá ahora: datos numéricos, pasos numerados "
                                          "y errores típicos. Nada de encuadre legal.]", "\n\n"):
+                    yield t
+            # respuesta floja (corta o titubeando): se reescribe una vez y se reemplaza
+            pregunta = mensajes[-1]["content"]
+            if not pide_cod and not pide_corto(pregunta) and respuesta_floja(visible):
+                yield "data: " + json.dumps({"aviso": "El modelo titubeó: la reescribo…"}) + "\n\n"
+                async for t in rehacer("[tu respuesta quedó floja y corta. Respondé otra vez, completa y concreta: "
+                                 "el dato primero, después pasos numerados con cantidades, nombres propios y "
+                                 "errores típicos. Sin condicionales, sin 'no existe', sin preguntar, en español.]"):
                     yield t
             # contesto solo la muletilla y se callo: se pide la respuesta de verdad
             if es_muletilla_sola(visible.strip()):
