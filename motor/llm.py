@@ -76,7 +76,7 @@ async def _stream_openrouter(cfg: dict, modelo: dict, mensajes: list, max_tokens
         "max_tokens": max_tokens,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "temperature": 0.6,
+        "temperature": 0.5,
     }
     if modelo.get("provider"):
         cuerpo["provider"] = modelo["provider"]

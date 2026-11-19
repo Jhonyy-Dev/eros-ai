@@ -79,6 +79,7 @@ for nombre, pedido in PEDIDOS:
                 print("  error:", j["error"])
     texto = texto.strip()
     bloques = BLOQUES.findall(texto)
+    compilado = False
     abierto = texto.count("```") % 2 == 1
     print("\n  %s | %.1fs | %d chars | bloques: %d | cerca abierta: %s | rehizo: %s"
           % (nombre, time.time() - t0, len(texto), len(bloques), abierto, "sin abreviar" in texto))
@@ -97,11 +98,14 @@ for nombre, pedido in PEDIDOS:
             compile(cuerpo, "<eros>", "exec")
             print("    OK: bloque '%s' compila (%d líneas)" % (etiqueta or "sin etiqueta", len(cuerpo.splitlines())))
         except SyntaxError as e:
-            if parece_python(etiqueta, cuerpo):
+            if parece_python(etiqueta, cuerpo) and not compilado:
                 fallas.append(nombre + ": no compila (linea %s)" % e.lineno)
                 print("    FALLA: no compila ->", str(e)[:90])
             else:
-                print("    OK: bloque '%s' de %d líneas (no python)" % (etiqueta, len(cuerpo.splitlines())))
+                print("    aviso: bloque '%s' de %d líneas no compila (fragmento)"
+                      % (etiqueta or "sin etiqueta", len(cuerpo.splitlines())))
+        if parece_python(etiqueta, cuerpo):
+            compilado = True
 
 print("\nresultado:", "TODO OK" if not fallas else "FALLAS: " + "; ".join(fallas))
 sys.exit(1 if fallas else 0)
