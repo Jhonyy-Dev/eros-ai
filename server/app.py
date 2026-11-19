@@ -424,6 +424,45 @@ HEDGES = ("suele ser", "suelen ser", "depende de", "depende", "tal vez", "en teo
           "ten en cuenta que", "ten en cuenta", "vale la pena", "cabe destacar")
 
 
+_RE_META = _re.compile(r"^\s*(`{3}[a-z]*)?\s*<\s*[a-z_]*safety\s*>[\s\S]*?</\s*[a-z_]*safety\s*>"
+                      r"\s*(?:safe|seguro|ok|yes|si|no)?[.:]?[ \t]*", _re.I)
+_RE_JINJA_BLOQUE = _re.compile(r"^\s*(`{3}[a-z]*)?\s*\{\{\s*#?if[\s\S]*?\{\{\s*/if\s*\}\}\s*"
+                              r"(?:safe|seguro|ok|yes|si|no)?[.:]?[ \t]*", _re.I)
+_RE_JINJA_INLINE = _re.compile(r"^\s*(`{3}[a-z]*)?\s*\{\{[^{}]*?\}\}\s*"
+                               r"(?:safe|seguro|ok|yes|si|no)?[.:]?[ \t]*", _re.I)
+
+
+def sin_meta(texto: str) -> str:
+    """Descarta los bloques de metadatos que el modelo manda al principio (ds_safety o plantilla)."""
+    t = texto or ""
+    for _ in range(4):
+        for rx in (_RE_META, _RE_JINJA_BLOQUE, _RE_JINJA_INLINE):
+            m = rx.match(t)
+            if m and m.end() > 0:
+                t = (m.group(1) or "") + t[m.end():]
+                break
+        else:
+            break
+    return t.lstrip("\n ")
+
+
+def parece_meta(texto: str) -> bool:
+    """True mientras puede ser un bloque de metadatos sin cerrar (con o sin cerca delante)."""
+    t = (texto or "").lstrip()
+    if not t:
+        return True
+    if sin_meta(t) != t:
+        return False                       # ya se puede cortar
+    cuerpo = t[3:].lstrip() if t.startswith("```") else t
+    if not cuerpo or len(cuerpo) > 1200:
+        return True
+    if cuerpo.startswith("{{"):
+        return True
+    if cuerpo.startswith("<"):
+        return "safety" in cuerpo[:120].lower() or len(cuerpo) < 40
+    return False
+
+
 def _limpia_frase(linea: str, capitalizar: bool = True) -> str:
     """Saca los titubeos de una linea y la deja legible."""
     out = linea
@@ -995,31 +1034,34 @@ async def chat(req: Request, body: dict = Body(...)):
         buffer = ""
         cola = ""
         emitido = False
+        cabeceado = False
         completo = ""
         visible = ""
-        resuelto = False
-        if prefill:
-            yield "data: " + json.dumps({"t": prefill}) + "\n\n"
-            visible = prefill
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
                 if "t" in ev:
                     completo += ev["t"]
+                    if not cabeceado:
+                        # la apertura se decide una sola vez: bloque de metadatos afuera y cerca propia
+                        crudo = sin_meta(completo)
+                        if parece_meta(completo) and crudo == completo:
+                            continue
+                        cabe = crudo.lstrip()
+                        if not cabe:
+                            continue
+                        suelto = (("\n" in cabe or len(cabe) >= 140) if prefill
+                                   else (("\n" in cabe and len(cabe) >= 24) or len(cabe) >= 140))
+                        if not suelto:
+                            continue
+                        if prefill and not cabe.startswith("```"):
+                            cabe = prefill + cabe        # la cerca la pone la app solo si el modelo no la trae
+                        limpio = arregla_primera(sin_muletilla(cabe))
+                        visible += limpio
+                        yield "data: " + json.dumps({"t": limpio}) + "\n\n"
+                        emitido = True
+                        cabeceado = True
+                        continue
                     trozo = ev["t"]
-                    if prefill and not resuelto:
-                        # el modelo a veces repite la cerca que ya mandamos en el prefill
-                        if len(completo) < 3:
-                            trozo = ""
-                        elif completo.startswith("```"):
-                            corte = completo.find("\n")
-                            if corte < 0:
-                                trozo = ""
-                            else:
-                                trozo = completo[corte:]
-                                resuelto = True
-                        else:
-                            trozo = completo
-                            resuelto = True
                     visible += trozo
                     if emitido:
                         cola += trozo
@@ -1028,10 +1070,6 @@ async def chat(req: Request, body: dict = Body(...)):
                             cola = cola[-RETENCION:]
                     else:
                         buffer += trozo
-                        if ("\n" in buffer and len(buffer) >= 24) or len(buffer) >= 120:
-                            yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buffer))}) + "\n\n"
-                            buffer = ""
-                            emitido = True
                 elif "backend" in ev:
                     modelo_usado = ev.get("modelo", "")
                     yield "data: " + json.dumps({"modelo": ev.get("modelo"), "backend": ev.get("backend")}) + "\n\n"
@@ -1045,9 +1083,18 @@ async def chat(req: Request, body: dict = Body(...)):
                     amable = MENSAJES_AMABLES.get(ev.get("codigo"), "Hubo un problema con el modelo. Intenta otra vez.")
                     yield "data: " + json.dumps({"error": amable, "detalle": ev["error"]}) + "\n\n"
             final_texto = visible.strip()
-            if buffer:
+            if not cabeceado and completo.strip():
+                cabe = sin_meta(completo).lstrip()
+                if cabe:
+                    if prefill and not cabe.startswith("```"):
+                        cabe = prefill + cabe
+                    limpio = arregla_primera(sin_muletilla(cabe))
+                    visible += limpio
+                    yield "data: " + json.dumps({"t": limpio}) + "\n\n"
+                    cabeceado = True
+            elif buffer:
                 # nunca se pierde la respuesta: aunque sea corta y limpia, se muestra
-                yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buffer))}) + "\n\n"
+                yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(sin_meta(buffer)))}) + "\n\n"
                 buffer = ""
             if cola:
                 yield "data: " + json.dumps({"t": arregla_ultima(cola)}) + "\n\n"
