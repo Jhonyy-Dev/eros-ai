@@ -340,6 +340,34 @@ async function estado(){
   } catch(e){ $('#cuota').textContent = 'sin conexión con Eros'; }
 }
 
+function historialParaEnviar(){
+  // manda lo ultimo, pero sin pasar de ~24.000 caracteres: con textos largos el modelo tarda menos en arrancar
+  const msgs = (conv().mensajes || []).slice(-18);
+  let total = 0, desde = 0;
+  for (let i = msgs.length - 1; i >= 0; i--){
+    total += (msgs[i].content || '').length;
+    if (total > 24000 && i < msgs.length - 1){ desde = i + 1; break; }
+  }
+  return msgs.slice(desde);
+}
+async function traerChat(cuerpo, signal){
+  // el borde de un hosting gratis contesta su pagina de "despertando" (403/502/503/504 o html)
+  // o incluso un 200 html: en esos casos se reintenta solo, avisando
+  for (let intento = 1; intento <= 5; intento++){
+    let r = null;
+    try {
+      r = await fetch('/api/chat', { method:'POST', signal,
+        headers:{ 'Content-Type':'application/json' }, body: cuerpo });
+    } catch(e){ if (e.name === 'AbortError') throw e; }
+    if (r && r.ok && (r.headers.get('content-type') || '').includes('text/event-stream')) return r;
+    if (r && (r.status === 400 || r.status === 401 || r.status === 422 || r.status === 429)) return r;
+    const espera = 3 * intento;
+    aviso((intento < 5 ? 'El servidor esta despertando' + (r ? ' (' + r.status + ')' : '') + '. ' : 'Ultimo intento. ')
+          + 'Espero ' + espera + 's…', 9000);
+    await new Promise(res => setTimeout(res, espera * 1000));
+  }
+  return null;
+}
 async function enviar(rehacer = false){
   const c = conv();
   if (rehacer){
@@ -384,16 +412,16 @@ async function enviar(rehacer = false){
   const empujar = t => { pendiente += t; ultimaLlegada = performance.now(); if (!animando){ animando = true; requestAnimationFrame(paso); } };
   const terminar = () => new Promise(res => { const ver = () => (animando ? setTimeout(ver, 50) : res()); ver(); });
   try {
-    const r = await fetch('/api/chat', {
-      method:'POST', signal: ctrl.signal,
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ mensajes: c.mensajes.slice(-18), max_tokens: 20000 })
-    });
-    if (!r.ok){
-      const e = await r.json().catch(() => ({ detail:'error ' + r.status }));
-      destino.closest('.turno').remove();
-      aviso(typeof e.detail === 'string' ? e.detail : 'hubo un problema, intenta otra vez');
-      if (r.status === 401) setTimeout(() => location.href = '/login', 1200);
+    const r = await traerChat(JSON.stringify({ mensajes: historialParaEnviar(), max_tokens: 20000 }), ctrl.signal);
+    if (!r || !r.ok){
+      const e = r ? await r.json().catch(() => ({ detail: '' })) : { detail: '' };
+      const textoErr = (typeof e.detail === 'string' && e.detail) ? e.detail
+            : (r ? 'El servidor contesto ' + r.status + '. Intenta otra vez en unos segundos.'
+                 : 'No pude conectar con el servidor. Revisa tu conexion e intenta otra vez.');
+      destino.classList.remove('cursor');
+      destino.innerHTML = '<span style="color:var(--fg2)">' + textoErr + '</span>';
+      aviso(textoErr, 9000);
+      if (r && r.status === 401) setTimeout(() => location.href = '/login', 1200);
       return;
     }
     const lector = r.body.getReader(), dec = new TextDecoder(); let buf = '';

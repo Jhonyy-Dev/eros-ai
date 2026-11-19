@@ -27,6 +27,8 @@ services:
         value: "8"
       - key: MAX_TOKENS
         value: "20000"
+      - key: MAX_TOKENS_CONTEXTO
+        value: "16000"
       - key: BACKEND
         value: "openrouter"
       - key: FALLBACK_LOCAL

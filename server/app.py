@@ -545,6 +545,17 @@ def comprobar_limites(u: dict, nombre: str):
     return tope_dia
 
 
+def devolver_mensaje(nombre: str) -> None:
+    """Si el modelo fallo antes de escribir nada, no se le cobra el mensaje al alumno."""
+    u = leer_uso()
+    reg = u["alumnos"].get(nombre)
+    if reg and reg.get("mensajes"):
+        reg["mensajes"] -= 1
+        reg.setdefault("reembolsos", 0)
+        reg["reembolsos"] += 1
+        guardar_uso(u)
+
+
 def anotar(u: dict, nombre: str) -> None:
     reg = u["alumnos"].setdefault(nombre, {"mensajes": 0, "tokens": 0})
     reg["mensajes"] += 1
@@ -1037,6 +1048,7 @@ async def chat(req: Request, body: dict = Body(...)):
         cabeceado = False
         completo = ""
         visible = ""
+        fallo = False
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
                 if "t" in ev:
@@ -1081,6 +1093,8 @@ async def chat(req: Request, body: dict = Body(...)):
                     costo += ev["uso"].get("costo", 0.0)
                 elif "error" in ev:
                     amable = MENSAJES_AMABLES.get(ev.get("codigo"), "Hubo un problema con el modelo. Intenta otra vez.")
+                    if not visible.strip():
+                        fallo = True
                     yield "data: " + json.dumps({"error": amable, "detalle": ev["error"]}) + "\n\n"
             final_texto = visible.strip()
             if not cabeceado and completo.strip():
@@ -1129,12 +1143,16 @@ async def chat(req: Request, body: dict = Body(...)):
             yield "data: " + json.dumps({"fin": True, "modelo": modelo_usado}) + "\n\n"
         except llm.ErrorModelo as e:
             amable = MENSAJES_AMABLES.get(e.codigo, "Hubo un problema con el modelo. Intenta otra vez.")
+            if not visible.strip():
+                fallo = True
             yield "data: " + json.dumps({"error": amable, "detalle": e.mensaje}) + "\n\n"
         except httpx.TransportError:
             yield "data: " + json.dumps({"error": "Problema de red. Intenta otra vez."}) + "\n\n"
         finally:
             if salida or entrada:
                 sumar_tokens(nombre, entrada, salida, costo)
+            if fallo and not visible.strip():
+                devolver_mensaje(nombre)
 
     return StreamingResponse(generador(), media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
