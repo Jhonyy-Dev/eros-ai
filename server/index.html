@@ -355,7 +355,7 @@ async function traerChat(cuerpo, signal){
   // el hosting gratis contesta su pagina (403/502/503/504) mientras arranca o mientras se actualiza:
   // se reintenta solo, avisando, hasta ~2 minutos
   const arranque = Date.now();
-  for (let intento = 1; intento <= 10; intento++){
+  for (let intento = 1; intento <= 18; intento++){
     let r = null;
     try {
       r = await fetch('/api/chat', { method:'POST', signal,
@@ -363,9 +363,9 @@ async function traerChat(cuerpo, signal){
     } catch(e){ if (e.name === 'AbortError') throw e; }
     if (r && r.ok && (r.headers.get('content-type') || '').includes('text/event-stream')) return r;
     if (r && (r.status === 400 || r.status === 401 || r.status === 422 || r.status === 429)) return r;
-    const espera = Math.min(12, 2 + intento);
+    const espera = Math.min(10, 2 + intento);
     const seg = Math.round((Date.now() - arranque) / 1000);
-    aviso('Eros se esta despertando o actualizando (' + seg + 's' + (r ? ', ' + r.status : '') +
+    aviso('Eros se esta despertando (' + seg + 's' + (r ? ', ' + r.status : '') +
           '). Sigo intentando en ' + espera + 's…', 12000);
     await new Promise(res => setTimeout(res, espera * 1000));
   }
@@ -419,8 +419,8 @@ async function enviar(rehacer = false){
     if (!r || !r.ok){
       const e = r ? await r.json().catch(() => ({ detail: '' })) : { detail: '' };
       const textoErr = (typeof e.detail === 'string' && e.detail) ? e.detail
-            : (r ? 'El servidor contesto ' + r.status + '. Intenta otra vez en unos segundos.'
-                 : 'El servidor tardo en responder. Espera un minuto y manda de nuevo.');
+            : (r ? 'El servidor contesto ' + r.status + '. Intenta de nuevo.'
+                 : 'El servidor no desperto a tiempo. Recarga la pagina (Ctrl+F5) y manda de nuevo.');
       destino.classList.remove('cursor');
       destino.innerHTML = '<span style="color:var(--fg2)">' + textoErr + '</span>';
       aviso(textoErr, 9000);
