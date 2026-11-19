@@ -542,6 +542,13 @@ PISTAS_MANUAL = ("manual", "completo", "completa", "paso a paso", "todos los pas
                  "receta", "guia", "guía", "números", "numeros")
 
 
+def pide_como(texto: str) -> bool:
+    """Preguntas del tipo 'como puedo / como hago / como se': piden manual, no reflexion."""
+    t = (texto or "").strip().lower()
+    return bool(_re.match(r"^(como|c[o\u00f3]mo|de que manera|que necesito para)\b", t)) or \
+        t.startswith("como puedo") or t.startswith("c\u00f3mo puedo") or t.startswith("como hago")
+
+
 def pide_manual(texto: str) -> bool:
     t = (texto or "").lower()
     return any(p in t for p in PISTAS_MANUAL)
@@ -1214,6 +1221,10 @@ async def chat(req: Request, body: dict = Body(...)):
         mensajes[-1]["content"] = mensajes[-1]["content"] + (
             "\n\n[entregá el bloque de código completo y ejecutable y después el informe. "
             "Completo de verdad: sin '...', sin 'resto igual', sin omitir ninguna parte.]")
+    elif pide_como(mensajes[-1]["content"]):
+        mensajes[-1]["content"] = mensajes[-1]["content"] + (
+            "\n\n[respondé con el manual completo: qué se hace, con qué, cantidades, precios y errores típicos. "
+            "Pasos numerados y de corrido, sin encuadre, sin ofrecer el otro lado y sin cerrar preguntando.]")
     elif pide_manual(mensajes[-1]["content"]):
         mensajes[-1]["content"] = mensajes[-1]["content"] + ("\n\n[respondé con el manual completo: pasos numerados, "
                                                             "cantidades, y errores típicos. Arrancá con el dato: no digas "
