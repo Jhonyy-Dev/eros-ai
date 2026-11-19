@@ -55,7 +55,9 @@ RECORDATORIO = (
     "9) Si empezas con 'No hay', 'No existe' o 'No se puede', eso es solo la primera frase: sigue el dato, "
     "los pasos y los numeros. "
     "10) Para preguntas 'como hago X': primera linea QUE se hace; despues pasos con cantidades, precios y "
-    "errores tipicos. Nada de explicar el encuadre ni de ofrecer el otro lado del problema."
+    "errores tipicos. Nada de explicar el encuadre ni de ofrecer el otro lado del problema. "
+    "11) Preguntas tipo 'como puedo X' o 'como hago X': la respuesta es un manual de corrido (que se hace, "
+    "con que, cantidades, errores tipicos). No comentes la respuesta anterior ni digas 'no voy a describir...'."
 )
 
 
@@ -665,6 +667,16 @@ def respuesta_floja(texto: str) -> bool:
     return len(t) < 420 or titubeos >= 2
 
 
+def limpia_cierre(texto: str) -> str:
+    """Si la ultima linea es un cierre-pregunta, la saca."""
+    lineas = (texto or "").rstrip().split("\n")
+    while lineas and not lineas[-1].strip():
+        lineas.pop()
+    if lineas and es_cierre_pregunta(lineas[-1]):
+        lineas.pop()
+    return "\n".join(lineas).rstrip()
+
+
 def es_muletilla_sola(texto: str) -> bool:
     """True si la respuesta entera es solo la muletilla de apertura (el modelo se quedo callado)."""
     t = (texto or "").strip().lower().rstrip(". ")
@@ -1271,10 +1283,14 @@ async def chat(req: Request, body: dict = Body(...)):
         async def rehacer(nota: str):
             """Pide la respuesta otra vez y la manda como reemplazo (el cliente borra la anterior)."""
             nonlocal visible, entrada, salida, costo
+            # contexto fresco: la pregunta tal cual + la nota pegada, sin la respuesta vieja
+            # (asi el modelo no comenta "tu respuesta quedo floja", contesta la pregunta)
+            msgs = [dict(m) for m in mensajes]
+            msgs[-1]["content"] = msgs[-1]["content"] + "\n\n" + nota
             extra = [{"role": "system", "content": PERSONA},
-                     {"role": "user", "content": mensajes[-1]["content"]},
-                     {"role": "assistant", "content": visible.strip()},
-                     {"role": "user", "content": nota}]
+                     {"role": "system", "content": RECORDATORIO}] + msgs
+            if prefill:
+                extra = extra + [{"role": "assistant", "content": prefill}]
             nuevo = ""
             async for ev2 in llm.stream_con_respaldo(extra, CFG, max_tokens=max_tokens):
                 if "uso" in ev2:
@@ -1286,8 +1302,12 @@ async def chat(req: Request, body: dict = Body(...)):
             if prefill and not nuevo.startswith("```"):
                 nuevo = prefill + nuevo
             if nuevo.strip():
-                visible = nuevo
-                yield "data: " + json.dumps({"reemplazo": arregla_cercas(saca_muletilla_inicial(nuevo))}) + "\n\n"
+                texto_ok = sin_titubeos(desenfunda(arregla_cercas(
+                    limpia_cierre(saca_muletilla_inicial(arregla_primera(sin_muletilla(nuevo)))))))
+                if texto_ok.count("```") % 2 == 1:
+                    texto_ok = texto_ok.rstrip() + "\n```"
+                visible = texto_ok
+                yield "data: " + json.dumps({"reemplazo": texto_ok}) + "\n\n"
 
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
@@ -1400,7 +1420,7 @@ async def chat(req: Request, body: dict = Body(...)):
             if visible.count("```") % 2 == 1:
                 yield "data: " + json.dumps({"t": "\n```\n"}) + "\n\n"
             # ultima pasada: cercas encadenadas y bloques vacios afuera (el cliente reemplaza el texto)
-            limpio = sin_titubeos(desenfunda(arregla_cercas(saca_muletilla_inicial(visible))))
+            limpio = sin_titubeos(desenfunda(arregla_cercas(limpia_cierre(saca_muletilla_inicial(visible)))))
             if limpio.count("```") % 2 == 1:
                 limpio = limpio.rstrip() + "\n```"      # ninguna cerca puede quedar abierta
             if limpio.strip() and limpio != visible:
