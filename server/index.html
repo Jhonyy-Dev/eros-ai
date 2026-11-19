@@ -349,17 +349,33 @@ function historialParaEnviar(){
     total += (msgs[i].content || '').length;
     if (total > 24000 && i < msgs.length - 1){ desde = i + 1; break; }
   }
-  return msgs.slice(desde);
+  return msgs.slice(desde).map((m, i, arr) => {
+    const c = m.content || '';
+    if (i === arr.length - 1 || c.length <= 6000) return { role: m.role, content: c };
+    return { role: m.role, content: c.slice(0, 3000) + '\n[...]\n' + c.slice(-3000) };
+  });
 }
-async function traerChat(cuerpo, signal){
-  // el hosting gratis contesta su pagina (403/502/503/504) mientras arranca o mientras se actualiza:
-  // se reintenta solo, avisando, hasta ~2 minutos
+async function cuerpoGzip(obj){
+  // cuerpo comprimido: el borde ve ~20 KB en vez de 120 KB y no lo corta
+  const json = JSON.stringify(obj);
+  try {
+    if (typeof CompressionStream === 'function'){
+      const comprimido = new Blob([json]).stream().pipeThrough(new CompressionStream('gzip'));
+      return { datos: await new Response(comprimido).arrayBuffer(), gzip: true };
+    }
+  } catch(e){}
+  return { datos: json, gzip: false };
+}
+async function traerChat(pedido, chico, signal){
+  // reintenta si el borde contesta su pagina; desde el 4to intento manda SOLO la pregunta (cuerpo minimo)
   const arranque = Date.now();
   for (let intento = 1; intento <= 18; intento++){
     let r = null;
     try {
+      const env = await cuerpoGzip(intento >= 4 ? chico : pedido);
       r = await fetch('/api/chat', { method:'POST', signal,
-        headers:{ 'Content-Type':'application/json' }, body: cuerpo });
+        headers: Object.assign({ 'Content-Type':'application/json' }, env.gzip ? { 'Content-Encoding':'gzip' } : {}),
+        body: env.datos });
     } catch(e){ if (e.name === 'AbortError') throw e; }
     if (r && r.ok && (r.headers.get('content-type') || '').includes('text/event-stream')) return r;
     if (r && (r.status === 400 || r.status === 401 || r.status === 422 || r.status === 429)) return r;
@@ -415,7 +431,9 @@ async function enviar(rehacer = false){
   const empujar = t => { pendiente += t; ultimaLlegada = performance.now(); if (!animando){ animando = true; requestAnimationFrame(paso); } };
   const terminar = () => new Promise(res => { const ver = () => (animando ? setTimeout(ver, 50) : res()); ver(); });
   try {
-    const r = await traerChat(JSON.stringify({ mensajes: historialParaEnviar(), max_tokens: 20000 }), ctrl.signal);
+    const pedido = { mensajes: historialParaEnviar(), max_tokens: 20000 };
+    const chico = { mensajes: historialParaEnviar().slice(-2), max_tokens: 20000 };
+    const r = await traerChat(pedido, chico, ctrl.signal);
     if (!r || !r.ok){
       const e = r ? await r.json().catch(() => ({ detail: '' })) : { detail: '' };
       const textoErr = (typeof e.detail === 'string' && e.detail) ? e.detail

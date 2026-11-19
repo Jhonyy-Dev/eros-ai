@@ -8,6 +8,7 @@
 import base64
 import datetime
 import hashlib
+import gzip
 import hmac
 import json
 import os
@@ -1089,6 +1090,17 @@ async def admin_borrar(req: Request, body: dict = Body(...)):
 
 
 # ---------------------------------------------------------------- api
+
+@app.middleware("http")
+async def _descomprimir_cuerpo(req: Request, call_next):
+    """El navegador manda el JSON comprimido: el borde ve un cuerpo chico y no lo corta."""
+    if (req.headers.get("content-encoding") or "").lower() == "gzip" and req.method in ("POST", "PUT", "PATCH"):
+        try:
+            req._body = gzip.decompress(await req.body())
+        except Exception:
+            pass
+    return await call_next(req)
+
 
 @app.get("/api/estado")
 def estado(req: Request):
