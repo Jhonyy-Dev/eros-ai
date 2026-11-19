@@ -603,7 +603,7 @@ def estatico(nombre: str):
         tipo = "video/webm"
     else:
         tipo = "image/png"
-    return FileResponse(archivo, media_type=tipo, headers={"Cache-Control": "public, max-age=86400"})
+    return FileResponse(archivo, media_type=tipo, headers={"Cache-Control": "public, max-age=2592000"})
 
 
 @app.post("/login")
