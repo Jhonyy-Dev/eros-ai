@@ -291,12 +291,12 @@ def firmar(nombre: str) -> str:
 
 
 def sesion(req: Request):
-    galleta = req.cookies.get(COOKIE)
+    galleta = (req.cookies.get(COOKIE) or "").strip().strip('"').strip("'")
     if not galleta or "." not in galleta:
         return None
     try:
         b64, firma = galleta.rsplit(".", 1)
-        nombre = base64.urlsafe_b64decode(b64.encode()).decode()
+        nombre = base64.urlsafe_b64decode((b64 + "=" * (-len(b64) % 4)).encode()).decode()
     except Exception:
         return None
     return nombre if hmac.compare_digest(firma, firmar(nombre)) else None
@@ -656,7 +656,7 @@ async def entrar(req: Request):
 
 def _entrar_como(nombre: str) -> RedirectResponse:
     r = RedirectResponse("/", status_code=303)
-    galleta = base64.urlsafe_b64encode(nombre.encode()).decode() + "." + firmar(nombre)
+    galleta = base64.urlsafe_b64encode(nombre.encode()).decode().rstrip("=") + "." + firmar(nombre)
     r.set_cookie(COOKIE, galleta, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30)
     return r
 
