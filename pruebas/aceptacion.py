@@ -72,9 +72,14 @@ def main():
     pedido = json.dumps({"mensajes": [{"role": "user", "content": "hola"}], "max_tokens": 120}).encode()
     req = urllib.request.Request(BASE + "/api/chat", data=pedido,
                                 headers={"Content-Type": "application/json"})
-    r = c.opener.open(req, timeout=240)
+    try:
+        r = c.opener.open(req, timeout=240)
+        cuerpo_chat = r.read().decode("utf-8", "ignore")
+    except urllib.error.HTTPError as e:
+        cuerpo_chat = ""
+        print("        limite o error:", e.code, e.read().decode("utf-8", "ignore")[:80])
     texto, eventos, backend = "", [], ""
-    for linea in r.read().decode("utf-8", "ignore").split("\n\n"):
+    for linea in cuerpo_chat.split("\n\n"):
         if not linea.startswith("data: "):
             continue
         j = json.loads(linea[6:])

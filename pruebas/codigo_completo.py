@@ -45,6 +45,8 @@ def parece_python(etiqueta, cuerpo):
     et = (etiqueta or "").lower().strip()
     if et.startswith("py") or "python" in et or et.startswith("#") and ".py" in et:
         return True
+    if not et and re.search(r"^\s*(import |from \w+ import|def |class )", cuerpo, re.M):
+        return True   # bloque sin etiqueta pero con pinta de python
     for linea in cuerpo.split("\n"):
         s = linea.strip()
         if not s or s.startswith("#") or s.startswith("!"):

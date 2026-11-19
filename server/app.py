@@ -536,7 +536,11 @@ def arregla_cercas(texto: str) -> str:
         p = l.strip()
         if p.startswith("```"):
             if len(p) > 3 and i + 1 < len(lineas) and lineas[i + 1].strip() == "```":
-                i += 2                    # bloque vacio: se descartan las dos lineas
+                siguiente = lineas[i + 2].strip() if i + 2 < len(lineas) else ""
+                if siguiente and not siguiente.startswith("```"):
+                    i += 1                # la cerca suelta sobra: el bloque sigue con lo que viene
+                else:
+                    i += 2                # bloque vacio de verdad: se descartan las dos lineas
                 continue
             if salida and salida[-1].strip().startswith("```"):
                 antes = salida[-1].strip()
