@@ -249,6 +249,7 @@ function md(txt, liviano){
   t = t.split(/\n{2,}/).map(b => (/^\s*<(h3|ul|ol|blockquote)/.test(b.trim()) || /^\u0010/.test(b.trim())) ? b : '<p>' + b.replace(/\n/g, '<br>') + '</p>').join('');
   return t.replace(/\u0010(\d+)\u0010/g, (m, i) => {
     const p = pre[i];
+    if (!p.c.trim()) return '';            // cuadros vacios que a veces deja el modelo
     const cab = p.abierto ? 'código en vivo' : p.l;
     return '<div class="caja"><div class="top"><span>' + cab + '</span><button class="copiar" data-c="' + encodeURIComponent(p.c) + '">copiar</button></div><pre><code>' + resaltar(p.c, p.l, liviano || p.abierto) + '</code></pre></div>';
   });
@@ -434,6 +435,10 @@ async function enviar(rehacer = false){
         if (!p.startsWith('data: ')) continue;
         let j; try { j = JSON.parse(p.slice(6)); } catch(e){ continue; }
         if (j.t){ acumulado += j.t; empujar(j.t); }
+        if (j.reemplazo){                     // el servidor normalizo el texto: se reemplaza sin reescribir
+          acumulado = j.reemplazo; revelado = j.reemplazo; pendiente = '';
+          destino.classList.remove('cursor'); destino.innerHTML = md(j.reemplazo); bajar();
+        }
         if (j.modelo){ const e = destino.closest('.turno').querySelector('#etq'); if (e) e.textContent = j.backend === 'local' ? 'respaldo local' : 'en la nube'; }
         if (j.aviso) franja('OpenRouter no respondió: sigo con el modelo local. (' + j.aviso.replace('respaldo local activo: ','') + ')');
         if (j.error){ aviso(j.error); if (!acumulado) destino.innerHTML = '<span style="color:var(--fg2)">' + j.error + '</span>'; }

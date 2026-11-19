@@ -526,6 +526,52 @@ def pide_manual(texto: str) -> bool:
     return any(p in t for p in PISTAS_MANUAL)
 
 
+def arregla_cercas(texto: str) -> str:
+    """Saca cercas encadenadas y bloques vacios (el modelo a veces encadena ``` por error)."""
+    lineas = (texto or "").split("\n")
+    salida = []
+    i = 0
+    while i < len(lineas):
+        l = lineas[i]
+        p = l.strip()
+        if p.startswith("```"):
+            if len(p) > 3 and i + 1 < len(lineas) and lineas[i + 1].strip() == "```":
+                i += 2                    # bloque vacio: se descartan las dos lineas
+                continue
+            if salida and salida[-1].strip().startswith("```"):
+                antes = salida[-1].strip()
+                rara_antes = ("<" in antes) or (">" in antes) or len(antes) > 14
+                rara_ahora = ("<" in p) or (">" in p) or len(p) > 14
+                if (rara_antes or len(antes) == 3) and not rara_ahora:
+                    salida.pop()          # nos quedamos con la de ahora, que si trae lenguaje
+                else:
+                    i += 1                # nos quedamos con la de antes
+                    continue
+        salida.append(l)
+        i += 1
+    return "\n".join(salida)
+
+
+def huecos_en_codigo(texto: str) -> bool:
+    """True si algun bloque de codigo viene abreviado de verdad (linea '...', comentario cortado)."""
+    marcas = ("resto igual", "sin cambios", "omito", "omitid", "etc.")
+    for bloque in _re.findall(r"```[a-z]*\n([\s\S]*?)```", texto or ""):
+        for linea in bloque.split("\n"):
+            p = linea.strip()
+            if not p:
+                continue
+            # una linea que es solo puntos suspensivos, o un comentario cortado
+            if p in ("...", "# ...", "// ...", "#...", "//..."):
+                return True
+            com = p.startswith("#") or p.startswith("//") or p.startswith("--") or p.startswith(";")
+            if com:
+                bajo = p.lower()
+                if (p.startswith("# ...") or p.startswith("// ...") or p.endswith("...")
+                        or any(m in bajo for m in marcas)):
+                    return True
+    return False
+
+
 def pide_codigo(texto: str) -> bool:
     t = (texto or "").lower()
     if "```" in t:
@@ -1032,7 +1078,9 @@ async def chat(req: Request, body: dict = Body(...)):
     if pide_codigo(mensajes[-1]["content"]):
         prefill = "```"
         conversacion = conversacion + [{"role": "assistant", "content": prefill}]
-        mensajes[-1]["content"] = mensajes[-1]["content"] + "\n\n[entregá el bloque de código completo y después el informe]"
+        mensajes[-1]["content"] = mensajes[-1]["content"] + (
+            "\n\n[entregá el bloque de código completo y ejecutable y después el informe. "
+            "Completo de verdad: sin '...', sin 'resto igual', sin omitir ninguna parte.]")
     elif pide_manual(mensajes[-1]["content"]):
         mensajes[-1]["content"] = mensajes[-1]["content"] + ("\n\n[respondé con el manual completo: pasos numerados, "
                                                             "cantidades, y errores típicos. Arrancá con el dato: no digas "
@@ -1049,6 +1097,56 @@ async def chat(req: Request, body: dict = Body(...)):
         completo = ""
         visible = ""
         fallo = False
+
+        async def pedir_mas(nota: str, separador: str = "", quitar_cerca: bool = False):
+            """Pide al modelo que siga o rehaga el codigo. Devuelve los trozos SSE ya limpios.
+
+            Con quitar_cerca=True se descarta la cerca con la que suele arrancar el modelo cuando
+            continua un bloque que ya estaba abierto (si no, queda un ``` adentro del codigo).
+            """
+            nonlocal entrada, salida, costo, visible
+            extra = [{"role": "system", "content": PERSONA},
+                     {"role": "user", "content": mensajes[-1]["content"]},
+                     {"role": "assistant", "content": visible.strip()},
+                     {"role": "user", "content": nota}]
+            trozos = []
+            if separador:
+                trozos.append("data: " + json.dumps({"t": separador}) + "\n\n")
+            crudo = ""
+            emitido = 0
+            cabeza_lista = not quitar_cerca
+            async for ev2 in llm.stream_con_respaldo(extra, CFG, max_tokens=max_tokens):
+                if "uso" in ev2:
+                    entrada += ev2["uso"].get("entrada", 0)
+                    salida += ev2["uso"].get("salida", 0)
+                    costo += ev2["uso"].get("costo", 0.0)
+                trozo = ev2.get("t")
+                if not trozo:
+                    continue
+                crudo += trozo
+                if not cabeza_lista:
+                    if crudo.lstrip().startswith("```"):
+                        corte = crudo.find("\n")
+                        if corte < 0:
+                            continue
+                        crudo = crudo[corte + 1:]
+                    cabeza_lista = True
+                if emitido == 0 and len(crudo) < 48:
+                    continue
+                nuevo = crudo[emitido:]
+                if not nuevo:
+                    continue
+                emitido = len(crudo)
+                salida_txt = arregla_primera(sin_muletilla(nuevo)) if emitido == len(nuevo) else nuevo
+                visible += salida_txt
+                trozos.append("data: " + json.dumps({"t": salida_txt}) + "\n\n")
+            nuevo = crudo[emitido:]
+            if nuevo:
+                salida_txt = arregla_primera(sin_muletilla(nuevo)) if emitido == 0 else nuevo
+                visible += salida_txt
+                trozos.append("data: " + json.dumps({"t": salida_txt}) + "\n\n")
+            return trozos
+
         try:
             async for ev in llm.stream_con_respaldo(conversacion, CFG, max_tokens=max_tokens):
                 if "t" in ev:
@@ -1113,33 +1211,40 @@ async def chat(req: Request, body: dict = Body(...)):
             if cola:
                 yield "data: " + json.dumps({"t": arregla_ultima(cola)}) + "\n\n"
                 cola = ""
-            if prefill:
-                todo = visible
-                if todo.count("```") % 2 == 1:
-                    yield "data: " + json.dumps({"t": "\n```\n"}) + "\n\n"
+            pide_cod = bool(prefill) or pide_codigo(mensajes[-1]["content"])
+            # el codigo no puede venir cortado: si la cerca quedo abierta, el servidor sigue solo
+            if pide_cod:
+                for _ in range(2):
+                    if visible.count("```") % 2 == 0:
+                        break
+                    for t in await pedir_mas("[seguí EXACTAMENTE desde donde cortaste el código: sin repetir lo ya "
+                                             "escrito, sin decir nada antes. Terminá el bloque.]",
+                                             "", quitar_cerca=True):
+                        yield t
+                    if not visible.strip():
+                        break
             # respuesta sospechosamente corta para un pedido grande: se pide la ampliacion
             if len(visible.strip()) < 1500 and (prefill or pide_manual(mensajes[-1]["content"])):
-                extra = [{"role": "system", "content": PERSONA},
-                         {"role": "user", "content": mensajes[-1]["content"]},
-                         {"role": "assistant", "content": visible.strip()},
-                         {"role": "user", "content": "[quedó corta. Continuá y completá ahora: datos numéricos, "
-                                                     "pasos numerados y errores típicos. Nada de encuadre legal.]"}]
-                if visible.strip():
-                    yield "data: " + json.dumps({"t": "\n\n"}) + "\n\n"
-                buf2 = ""
-                emitido2 = False
-                async for ev2 in llm.stream_con_respaldo(extra, CFG, max_tokens=max_tokens):
-                    if "t" in ev2:
-                        if emitido2:
-                            yield "data: " + json.dumps({"t": ev2["t"]}) + "\n\n"
-                        else:
-                            buf2 += ev2["t"]
-                            if len(buf2) >= 48:
-                                yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buf2))}) + "\n\n"
-                                buf2 = ""
-                                emitido2 = True
-                if buf2:
-                    yield "data: " + json.dumps({"t": arregla_primera(sin_muletilla(buf2))}) + "\n\n"
+                for t in await pedir_mas("[quedó corta. Continuá y completá ahora: datos numéricos, pasos numerados "
+                                         "y errores típicos. Nada de encuadre legal.]", "\n\n"):
+                    yield t
+            # el codigo vino abreviado con "...": se pide el bloque entero otra vez
+            if pide_cod and huecos_en_codigo(visible) and len(visible) < 40000:
+                for ronda in range(2):
+                    if not huecos_en_codigo(visible):
+                        break
+                    for t in await pedir_mas("[repetí únicamente los bloques que quedaron abreviados con '...' o "
+                                             "cortados con un comentario: completos y ejecutables. Solo esos bloques.]",
+                                             "\n\n**Los mismos bloques, completos y sin abreviar**\n\n"):
+                        yield t
+            # ninguna cerca puede quedar abierta, pase lo que pase
+            if visible.count("```") % 2 == 1:
+                yield "data: " + json.dumps({"t": "\n```\n"}) + "\n\n"
+            # ultima pasada: cercas encadenadas y bloques vacios afuera (el cliente reemplaza el texto)
+            limpio = arregla_cercas(visible)
+            if limpio.strip() and limpio != visible:
+                visible = limpio
+                yield "data: " + json.dumps({"reemplazo": limpio}) + "\n\n"
             yield "data: " + json.dumps({"fin": True, "modelo": modelo_usado}) + "\n\n"
         except llm.ErrorModelo as e:
             amable = MENSAJES_AMABLES.get(e.codigo, "Hubo un problema con el modelo. Intenta otra vez.")
