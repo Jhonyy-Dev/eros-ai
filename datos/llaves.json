@@ -596,7 +596,7 @@
   "creada": "2026-11-24 21:21:55"
  },
  "ubrwhv": {
-  "alumno": "alumno2_seg",
+  "alumno": null,
   "creada": "2026-11-24 21:22:09"
  },
  "x9zusn": {
@@ -611,5 +611,13 @@
   "alumno": null,
   "creada": "2026-11-24 21:24:39",
   "serie": true
+ },
+ "rbutns": {
+  "alumno": "seg74384",
+  "creada": "2026-11-24 21:39:44"
+ },
+ "2rtdja": {
+  "alumno": "alumno2_seg",
+  "creada": "2026-11-24 21:40:08"
  }
 }
