@@ -171,7 +171,16 @@
       <div id="cuota">— de —</div>
       <a id="salir" href="/logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3.5H7.5A3.5 3.5 0 0 0 4 7v10a3.5 3.5 0 0 0 3.5 3.5h6"/><path d="M9.5 12h10"/><path d="M16.5 8.2 20.3 12l-3.8 3.8"/></svg>Salir</a>
       <div class="fila"><a class="mini" id="btnPanel" href="/panel" style="display:none">Panel</a><button class="mini" id="compartir">copiar enlace</button></div>
-      <div class="fila"><button class="mini" id="pedirApi">quiero la API</button><button class="mini" id="pedirTokens">comprar tokens</button></div>
+      <div class="servicios">
+        <button class="btn-serv" id="pedirApi" title="Usar Eros desde tu IDE">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6 2 12l6 6"/><path d="M16 6l6 6-6 6"/><path d="M13 4 11 20"/></svg>
+          <span><b>Quiero la API</b><i>para VS Code, Hermes o tu IDE</i></span>
+        </button>
+        <button class="btn-serv" id="pedirTokens" title="Comprar mas mensajes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+          <span><b>Comprar tokens</b><i>mas mensajes para seguir</i></span>
+        </button>
+      </div>
       <div class="fila"><span class="etiqueta" id="modeloLado">—</span></div>
     </div>
   </aside>
@@ -196,7 +205,7 @@
         <div id="inicio">
           <div class="globo"><img src="/static/eros.jpg" alt="Eros"></div>
           <h1>Hola, soy Eros</h1>
-          <p>Asistente del curso para programación y tecnología. Sin filtros, con memoria de toda la conversación y respuestas con datos. Tienes <span id="textoLimite">25</span> mensajes por día.</p>
+          <p>Asistente del curso para programación y tecnología. Sin filtros, con memoria de toda la conversación y respuestas con datos. Cada clave te da <span id="textoLimite">10</span> mensajes; cuando se gastan, pides otra.</p>
           <div class="tarjetas" id="tarjetas"></div>
         </div>
       </div>
