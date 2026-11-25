@@ -151,6 +151,7 @@
       <div id="cuota">— de —</div>
       <a id="salir" href="/logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 3.5H7.5A3.5 3.5 0 0 0 4 7v10a3.5 3.5 0 0 0 3.5 3.5h6"/><path d="M9.5 12h10"/><path d="M16.5 8.2 20.3 12l-3.8 3.8"/></svg>Salir</a>
       <div class="fila"><a class="mini" id="btnPanel" href="/panel" style="display:none">Panel</a><button class="mini" id="compartir">copiar enlace</button></div>
+      <div class="fila"><button class="mini" id="pedirApi">quiero la API</button><button class="mini" id="pedirTokens">comprar tokens</button></div>
       <div class="fila"><span class="etiqueta" id="modeloLado">—</span></div>
     </div>
   </aside>
@@ -327,7 +328,12 @@ async function estado(){
     if (!d.sesion){ location.href = '/login'; return; }
     $('#quien').textContent = d.nombre;
     $('#textoLimite').textContent = d.limite_dia;
-    $('#cuota').innerHTML = '<b>' + d.restantes_hoy + '</b> de ' + d.limite_dia + ' disponibles hoy';
+    if (d.cuota_por_clave){
+      $('#cuota').innerHTML = '<b>' + d.restantes_clave + '</b> de ' + d.mensajes_por_clave + ' mensajes de esta clave';
+      $('#restantes').textContent = d.restantes_clave + ' / ' + d.mensajes_por_clave + ' (clave)';
+    } else {
+      $('#cuota').innerHTML = '<b>' + d.restantes_hoy + '</b> de ' + d.limite_dia + ' disponibles hoy';
+    }
     $('#barraUso').style.width = Math.round(100 * d.restantes_hoy / d.limite_dia) + '%';
     $('#restantes').textContent = d.restantes_hoy + ' / ' + d.limite_dia + ' hoy';
     $('#tokens').textContent = d.usados_hoy + ' mensajes usados · ' + d.tokens_hoy.toLocaleString('es') + ' tokens';
@@ -481,10 +487,35 @@ async function enviar(rehacer = false){
   }
 }
 
+
+function tarjetaChat(titulo, texto){
+  const d = document.createElement('div');
+  d.className = 'turno ia';
+  d.innerHTML = '<div class="cab"><span class="av"><img src="/static/eros.jpg" alt=""></span>' +
+    '<span class="nom">Eros</span></div><div class="cuerpo"><b>' + esc(titulo) + '</b><br>' + esc(texto) + '</div>';
+  $('#hilo').querySelector('.col').appendChild(d);
+  bajar();
+}
+async function pedirServicio(tipo, etiqueta){
+  try {
+    const r = await fetch('/api/solicitud', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ tipo: tipo }) });
+    const d = await r.json();
+    if (!r.ok) { aviso(d.detail || 'no se pudo enviar'); return; }
+    tarjetaChat(d.ya ? 'Ya teníamos tu pedido' : 'Solicitud enviada al administrador',
+      d.ya ? ('Ya pediste ' + etiqueta + ' hace poco. El profe te responde pronto.')
+           : ('Pediste ' + etiqueta + '. La solicitud quedó anotada y obtendrás respuesta pronto.'));
+  } catch(e){ aviso('No se pudo enviar la solicitud. Intenta otra vez.'); }
+}
+
 function autoAlto(){ const t = $('#entrada'); t.style.height='auto'; t.style.height = Math.min(190, t.scrollHeight) + 'px'; }
 function cerrarLado(){ $('#lado').classList.remove('abierto'); $('#cortina').classList.remove('ver'); }
 
 $('#enviar').onclick = () => enviando ? ctrl.abort() : enviar();
+
+$('#pedirApi').addEventListener('click', () => pedirServicio('api', 'la API'));
+$('#pedirTokens').addEventListener('click', () => pedirServicio('tokens', 'comprar tokens'));
+
 $('#entrada').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); enviar(); } });
 $('#entrada').addEventListener('input', autoAlto);
 $('#nuevo').onclick = () => { actual = null; pintarLista(); hilo(true); $('#entrada').focus(); cerrarLado(); };

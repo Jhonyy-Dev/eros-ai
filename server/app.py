@@ -143,34 +143,83 @@ def _alumnos_del_env() -> str:
     return ""
 
 
-def alumnos() -> dict:
-    """nombre -> codigo. Mezcla la linea manual del .env, la tabla que mantiene la app y la variable de entorno."""
-    d = _pares(_alumnos_del_env())
+def leer_alumnos_crudo() -> dict:
     archivo = archivo_alumnos()
-    if archivo.exists():
-        try:
-            d.update(json.loads(archivo.read_text(encoding="utf-8")))
-        except Exception:
-            pass
+    if not archivo.exists():
+        return {}
+    try:
+        d = json.loads(archivo.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def borrados() -> list:
+    return [str(x) for x in (leer_alumnos_crudo().get("_borrados") or [])]
+
+
+def marcar_borrado(nombre: str) -> None:
+    lista = borrados()
+    if nombre and nombre not in lista:
+        lista.append(nombre)
+    crudo = dict(leer_alumnos_crudo())
+    crudo["_borrados"] = lista
+    archivo = archivo_alumnos()
+    archivo.parent.mkdir(parents=True, exist_ok=True)
+    tmp = archivo.with_suffix(".tmp")
+    tmp.write_text(json.dumps(crudo, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(archivo)
+
+
+def alumnos() -> dict:
+    """nombre -> codigo. La tabla que mantiene la app MANDA; el .env y la variable solo agregan."""
+    d = _pares(_alumnos_del_env())
     d.update(_pares(os.environ.get("ALUMNOS", "")))
+    for n, c in leer_alumnos_crudo().items():
+        if n and not n.startswith("_"):
+            d[n] = c
+    for n in borrados():
+        d.pop(n, None)
     return {n: c for n, c in d.items() if n}
 
 
 def guardar_alumnos(tabla: dict) -> None:
     archivo = archivo_alumnos()
     archivo.parent.mkdir(parents=True, exist_ok=True)
+    datos = {n: c for n, c in tabla.items() if n and not n.startswith("_")}
+    datos["_borrados"] = [x for x in borrados() if x not in datos]
     tmp = archivo.with_suffix(".tmp")
-    tmp.write_text(json.dumps({n: c for n, c in tabla.items() if n}, ensure_ascii=False, indent=1),
-                   encoding="utf-8")
+    tmp.write_text(json.dumps(datos, ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(archivo)
 
 
-def firmar_admin() -> str:
-    return hmac.new(SECRETO, b"admin", hashlib.sha256).hexdigest()[:32]
+def firmar_admin(caduca: int = 0) -> str:
+    """Firma del panel con caducidad y nonce (el nonce se puede rotar para cerrar sesiones)."""
+    return hmac.new(SECRETO, ("admin|" + str(caduca) + "|" + nonce_admin()).encode(),
+                    hashlib.sha256).hexdigest()[:32]
+
+
+def galleta_admin() -> str:
+    caduca = int(time.time()) + 90 * 86400
+    return str(caduca) + "." + firmar_admin(caduca)
+
+
+def admin_ok(galleta: str) -> bool:
+    if not galleta:
+        return False
+    if "." in galleta:
+        caduca, firma = galleta.rsplit(".", 1)
+        try:
+            if int(caduca) < time.time():
+                return False
+        except Exception:
+            return False
+        return hmac.compare_digest(firma, firmar_admin(int(caduca)))
+    return hmac.compare_digest(galleta, firmar_admin(0))
 
 
 def es_admin(req: Request) -> bool:
-    return hmac.compare_digest(req.cookies.get(COOKIE_ADMIN) or "", firmar_admin())
+    return admin_ok(req.cookies.get(COOKIE_ADMIN) or "")
 
 
 # ---------------------------------------------------------------- llaves de invitacion
@@ -693,6 +742,21 @@ def es_muletilla_sola(texto: str) -> bool:
     return any(t == m or t.startswith(m) for m in MULETILLA_SOLA)
 
 
+def bloque_python_roto(texto: str) -> bool:
+    """True si algun bloque de codigo parece python y no compila (error de sintaxis del modelo)."""
+    for etiqueta, cuerpo in _re.findall(r"```([^\n]*)\n([\s\S]*?)```", texto or ""):
+        et = (etiqueta or "").lower().strip()
+        es_py = ("py" in et or (et.startswith("#") and ".py" in et)
+                 or (not et and bool(_re.match(r"\s*(import |from |def |class |#!/usr/bin/env python)", cuerpo))))
+        if not es_py or len(cuerpo) < 200:
+            continue
+        try:
+            compile(cuerpo, "<eros>", "exec")
+        except SyntaxError:
+            return True
+    return False
+
+
 def huecos_en_codigo(texto: str) -> bool:
     """True si algun bloque de codigo viene abreviado de verdad (linea '...', comentario cortado)."""
     marcas = ("resto igual", "sin cambios", "omito", "omitid", "etc.")
@@ -720,12 +784,68 @@ def pide_codigo(texto: str) -> bool:
     return any(p in t for p in PISTAS_CODIGO)
 
 
+ARCHIVO_CLAVES_USO = DATOS / "claves-uso.json"
+ARCHIVO_SOLICITUDES = DATOS / "solicitudes.json"
+
+
+def leer_claves_uso() -> dict:
+    try:
+        return json.loads(ARCHIVO_CLAVES_USO.read_text(encoding="utf-8")) if ARCHIVO_CLAVES_USO.exists() else {}
+    except Exception:
+        return {}
+
+
+def guardar_claves_uso(d: dict) -> None:
+    tmp = ARCHIVO_CLAVES_USO.with_suffix(".tmp")
+    tmp.write_text(json.dumps(d, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(ARCHIVO_CLAVES_USO)
+
+
+def clave_de(nombre: str) -> str:
+    """Clave actual del alumno (vacia si entro con la clave maestra)."""
+    tabla = alumnos()
+    real = next((nn for nn in tabla if misma(nn, nombre or "")), None)
+    return (tabla.get(real) or "") if real else ""
+
+
+def clave_con_cuota(nombre: str):
+    """Devuelve el codigo de la clave si el alumno entra con una llave de invitacion (no con la maestra)."""
+    if (CFG.get("CUOTA_POR_CLAVE", "true").lower() != "true"):
+        return None
+    codigo = llave_real(clave_de(nombre))
+    if not codigo or misma(codigo, CFG.get("ADMIN_CLAVE") or ""):
+        return None
+    return codigo if codigo in leer_llaves() else None
+
+
+def leer_solicitudes() -> list:
+    try:
+        return json.loads(ARCHIVO_SOLICITUDES.read_text(encoding="utf-8")) if ARCHIVO_SOLICITUDES.exists() else []
+    except Exception:
+        return []
+
+
+def guardar_solicitudes(lista: list) -> None:
+    tmp = ARCHIVO_SOLICITUDES.with_suffix(".tmp")
+    tmp.write_text(json.dumps(lista, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(ARCHIVO_SOLICITUDES)
+
+
 def comprobar_limites(u: dict, nombre: str):
     tope_dia = int(CFG.get("LIMITE_MENSAJES_DIA") or 100)
     tope_min = int(CFG.get("LIMITE_MENSAJES_MINUTO") or 10)
-    usado_dia = u["alumnos"].get(nombre, {}).get("mensajes", 0)
-    if usado_dia >= tope_dia:
-        raise HTTPException(429, "Llegaste a tus " + str(tope_dia) + " mensajes de hoy. Se reinician a medianoche.")
+    codigo = clave_con_cuota(nombre)
+    if codigo:
+        # la clave se gasta UNA vez: 10 mensajes y pidio otra
+        tope_clave = int(CFG.get("MENSAJES_POR_CLAVE") or 10)
+        usados = leer_claves_uso().get(codigo, {}).get("mensajes", 0)
+        if usados >= tope_clave:
+            raise HTTPException(429, "Esta clave ya uso sus " + str(tope_clave) +
+                                " mensajes. Pedile otra al profe para seguir. (Tus respuestas quedan guardadas.)")
+    else:
+        usado_dia = u["alumnos"].get(nombre, {}).get("mensajes", 0)
+        if usado_dia >= tope_dia:
+            raise HTTPException(429, "Llegaste a tus " + str(tope_dia) + " mensajes de hoy. Se reinician a medianoche.")
     m = u["minuto"].get(nombre) or {}
     if m.get("minuto") == ahora_min() and m.get("n", 0) >= tope_min:
         raise HTTPException(429, "Vas muy rápido: máximo " + str(tope_min) + " mensajes por minuto. Espera unos segundos.")
@@ -741,6 +861,12 @@ def devolver_mensaje(nombre: str) -> None:
         reg.setdefault("reembolsos", 0)
         reg["reembolsos"] += 1
         guardar_uso(u)
+    codigo = clave_con_cuota(nombre)
+    if codigo:
+        uso_c = leer_claves_uso()
+        if uso_c.get(codigo, {}).get("mensajes"):
+            uso_c[codigo]["mensajes"] -= 1
+            guardar_claves_uso(uso_c)
 
 
 def anotar(u: dict, nombre: str) -> None:
@@ -754,6 +880,13 @@ def anotar(u: dict, nombre: str) -> None:
         m["n"] = 0
     m["n"] += 1
     guardar_uso(u)
+    codigo = clave_con_cuota(nombre)
+    if codigo:
+        uso_c = leer_claves_uso()
+        reg_c = uso_c.setdefault(codigo, {"mensajes": 0, "tokens": 0})
+        reg_c["mensajes"] = reg_c.get("mensajes", 0) + 1
+        reg_c["ultima"] = reg["ultima"]
+        guardar_claves_uso(uso_c)
 
 
 def sumar_tokens(nombre: str, entrada: int, salida: int, costo: float = 0.0) -> None:
@@ -796,6 +929,10 @@ def estatico(nombre: str):
 @app.post("/login")
 async def entrar(req: Request):
     datos = parse_qs((await req.body()).decode("utf-8", "ignore"))
+    try:
+        limitar("l:" + ip_real(req), int(CFG.get("TOPE_LOGIN_MINUTO") or 60), 60, "login")
+    except HTTPException:
+        return RedirectResponse("/login?error=prisa", status_code=303)
     alias = limpio_valor((datos.get("nombre") or [""])[0])
     codigo = limpio_valor((datos.get("codigo") or [""])[0])
     if not alias or not codigo:
@@ -812,11 +949,11 @@ async def entrar(req: Request):
             tabla[alias] = codigo_random()
             guardar_alumnos(tabla)
             real = alias
-        return _entrar_como(real)
+        return _entrar_como(real, es_seguro(req))
 
     # 1) alumno ya registrado con su llave
     if real and misma(tabla[real], codigo):
-        return _entrar_como(real)
+        return _entrar_como(real, es_seguro(req))
 
     # 2) llave libre: registra el alias nuevo, o re-vincula una llave nueva al mismo alias (rotacion)
     codigo_real = llave_real(codigo)
@@ -831,7 +968,7 @@ async def entrar(req: Request):
             real = alias
         guardar_alumnos(tabla)
         marcar_llave(codigo_real, real)
-        return _entrar_como(real)
+        return _entrar_como(real, es_seguro(req))
 
     # 3) alias tomado por otro
     if real and real.lower() != alias.lower():
@@ -841,10 +978,11 @@ async def entrar(req: Request):
     return RedirectResponse("/login?error=llave", status_code=303)
 
 
-def _entrar_como(nombre: str) -> RedirectResponse:
+def _entrar_como(nombre: str, seguro: bool = True) -> RedirectResponse:
     r = RedirectResponse("/", status_code=303)
     galleta = base64.urlsafe_b64encode(nombre.encode()).decode().rstrip("=") + "." + firmar(nombre)
-    r.set_cookie(COOKIE, galleta, httponly=True, samesite="lax", max_age=60 * 60 * 24 * 30)
+    r.set_cookie(COOKIE, galleta, httponly=True, samesite="lax", secure=seguro,
+                 max_age=60 * 60 * 24 * 30)
     return r
 
 
@@ -881,6 +1019,14 @@ def vista_admin(req: Request):
 @app.post("/admin/entrar")
 async def admin_entrar(req: Request):
     datos = parse_qs((await req.body()).decode("utf-8", "ignore"))
+    ip = ip_real(req)
+    try:
+        limitar("a:" + ip, int(CFG.get("TOPE_ADMIN_MINUTO") or 20), 60, "admin")
+    except HTTPException:
+        return RedirectResponse("/admin?error=prisa", status_code=303)
+    if _bloqueado(ip):
+        seguro("403 admin bloqueado " + ip)
+        return RedirectResponse("/admin?error=2", status_code=303)
     usuario = limpio_valor((datos.get("usuario") or [""])[0])
     clave = limpio_valor((datos.get("clave") or [""])[0])
     tabla = alumnos()
@@ -889,9 +1035,13 @@ async def admin_entrar(req: Request):
     user_ok = misma(usuario, CFG.get("ADMIN_USER") or "profe")
     clave_ok = bool(clave) and (misma(clave, CFG.get("ADMIN_CLAVE") or "") or misma(clave, clave_rescate))
     if not user_ok or not clave_ok:
+        _fallo_admin(ip)
+        seguro("login admin fallido " + ip + " usuario=" + usuario)
         return RedirectResponse("/admin?error=1", status_code=303)
+    _ok_admin(ip)
     r = RedirectResponse("/panel", status_code=303)
-    r.set_cookie(COOKIE_ADMIN, firmar_admin(), httponly=True, samesite="lax", max_age=60 * 60 * 24 * 90)
+    r.set_cookie(COOKIE_ADMIN, galleta_admin(), httponly=True, samesite="lax", secure=es_seguro(req),
+                 max_age=60 * 60 * 24 * 90)
     return r
 
 
@@ -905,7 +1055,7 @@ def admin_a_chat(req: Request):
     if usuario not in tabla:
         tabla[usuario] = codigo_random()
         guardar_alumnos(tabla)
-    return _entrar_como(usuario)
+    return _entrar_como(usuario, es_seguro(req))
 
 
 @app.post("/api/admin/cuenta")
@@ -1077,6 +1227,7 @@ async def admin_borrar(req: Request, body: dict = Body(...)):
         raise HTTPException(404, "no existe ese alumno")
     tabla.pop(real)
     guardar_alumnos(tabla)
+    marcar_borrado(real)
     liberar_llave(codigo_actual := (tabla_llaves := leer_llaves()) and None or None) if False else None
     llaves = leer_llaves()
     for codigo, v in list(llaves.items()):
@@ -1090,6 +1241,129 @@ async def admin_borrar(req: Request, body: dict = Body(...)):
 
 
 # ---------------------------------------------------------------- api
+
+ARCHIVO_SEGURIDAD = DATOS / "seguridad.log"
+ARCHIVO_NONCE = DATOS / "admin-nonce.txt"
+TOPE_CUERPO = int(CFG.get("TOPE_CUERPO_MB") or 2) * 1024 * 1024
+BASES_CONFIABLES = tuple(b for b in (CFG.get("BASES_CONFIABLES") or "").split(",") if b)
+_cubos = {}
+_intentos_admin = {}
+_nonce = {"valor": ""}
+
+
+def es_seguro(req: Request) -> bool:
+    """Cookie Secure siempre, salvo pruebas locales por http://127.0.0.1."""
+    host = (req.headers.get("host") or "").split(":")[0].lower()
+    return host not in ("127.0.0.1", "localhost", "0.0.0.0", "")
+
+
+def ip_real(req: Request) -> str:
+    """IP verdadera: detras de Cloudflare el cliente es el borde, no el alumno."""
+    for cab in ("cf-connecting-ip", "x-real-ip"):
+        v = req.headers.get(cab)
+        if v:
+            return v.split(",")[0].strip()[:45]
+    xff = req.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()[:45]
+    return (req.client.host if req.client else "?")[:45]
+
+
+def seguro(msg: str) -> None:
+    """Anota un evento de seguridad (si falla, no rompe la web)."""
+    try:
+        ARCHIVO_SEGURIDAD.parent.mkdir(parents=True, exist_ok=True)
+        with ARCHIVO_SEGURIDAD.open("a", encoding="utf-8") as f:
+            f.write(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + " " + msg[:300] + "\n")
+    except Exception:
+        pass
+
+
+def limitar(clave: str, tope: int, ventana: int, etiqueta: str = "") -> None:
+    """Tope de pedidos por ventana de segundos, por IP."""
+    ahora = time.time()
+    cubo = _cubos.setdefault(clave, [])
+    while cubo and ahora - cubo[0] > ventana:
+        cubo.pop(0)
+    if len(cubo) >= tope:
+        if etiqueta:
+            seguro("429 " + etiqueta + " " + clave)
+        raise HTTPException(429, "Demasiados pedidos seguidos. Espera unos segundos.")
+    cubo.append(ahora)
+
+
+def puerta(req: Request, nombre: str) -> str:
+    ip = ip_real(req)
+    limitar("g:" + ip + ":" + nombre, int(CFG.get("TOPE_IP_MINUTO") or 200), 60, nombre)
+    return ip
+
+
+def nonce_admin() -> str:
+    """Valor rotable: al cambiarlo se cierran TODAS las sesiones de admin."""
+    if _nonce["valor"]:
+        return _nonce["valor"]
+    try:
+        if ARCHIVO_NONCE.exists():
+            _nonce["valor"] = ARCHIVO_NONCE.read_text(encoding="utf-8").strip() or "fijo"
+        else:
+            _nonce["valor"] = secrets.token_hex(8)
+            ARCHIVO_NONCE.write_text(_nonce["valor"], encoding="utf-8")
+    except Exception:
+        _nonce["valor"] = "fijo"
+    return _nonce["valor"]
+
+
+def _bloqueado(ip: str) -> bool:
+    reg = _intentos_admin.get(ip)
+    return bool(reg and reg.get("hasta", 0) > time.time())
+
+
+def _fallo_admin(ip: str) -> None:
+    reg = _intentos_admin.setdefault(ip, {"fallos": 0, "hasta": 0})
+    reg["fallos"] = reg.get("fallos", 0) + 1
+    if reg["fallos"] >= 6:
+        reg["hasta"] = time.time() + 300
+        reg["fallos"] = 0
+        seguro("admin bloqueado 5 min " + ip)
+
+
+def _ok_admin(ip: str) -> None:
+    _intentos_admin[ip] = {"fallos": 0, "hasta": 0}
+
+
+@app.middleware("http")
+async def _endurecer(req: Request, call_next):
+    if req.method in ("POST", "PUT", "PATCH"):
+        largo = int(req.headers.get("content-length") or 0)
+        if largo > TOPE_CUERPO:
+            return JSONResponse({"detail": "El cuerpo supera " + str(TOPE_CUERPO // 1048576) + " MB."}, 413)
+        if (req.headers.get("content-encoding") or "").lower() == "gzip":
+            try:
+                req._body = gzip.decompress(await req.body())
+            except Exception:
+                pass
+        origen = req.headers.get("origin") or req.headers.get("referer") or ""
+        if origen:
+            host = origen.replace("//", "/").split("/")[1].lower() if "//" in origen else ""
+            mio = (req.headers.get("host") or "").lower()
+            if host and mio and host != mio and not any(host == b or host.endswith("." + b) for b in BASES_CONFIABLES):
+                seguro("403 origen " + host + " != " + mio)
+                return JSONResponse({"detail": "Origen no permitido: " + host}, 403)
+    respuesta = await call_next(req)
+    h = respuesta.headers
+    h["X-Content-Type-Options"] = "nosniff"
+    h["X-Frame-Options"] = "DENY"
+    h["Referrer-Policy"] = "no-referrer"
+    h["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    h["Cross-Origin-Opener-Policy"] = "same-origin"
+    h["Cross-Origin-Resource-Policy"] = "same-origin"
+    h["Content-Security-Policy"] = ("default-src 'self'; img-src 'self' data:; media-src 'self'; "
+                                    "style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; "
+                                    "connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+    if req.url.scheme == "https":
+        h["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return respuesta
+
 
 @app.middleware("http")
 async def _descomprimir_cuerpo(req: Request, call_next):
@@ -1109,6 +1383,9 @@ def estado(req: Request):
     modelo = models.activo(CFG)
     tope_dia = int(CFG.get("LIMITE_MENSAJES_DIA") or 100)
     reg = u["alumnos"].get(nombre or "", {"mensajes": 0, "tokens": 0})
+    clave_cta = clave_con_cuota(nombre or "") if nombre else None
+    tope_clave = int(CFG.get("MENSAJES_POR_CLAVE") or 10)
+    usados_clave = leer_claves_uso().get(clave_cta or "", {}).get("mensajes", 0)
     return {
         "sesion": bool(nombre),
         "nombre": nombre,
@@ -1119,6 +1396,7 @@ def estado(req: Request):
         "respaldo_local": (CFG.get("FALLBACK_LOCAL", "true").lower() == "true"),
         "usados_hoy": reg.get("mensajes", 0),
         "restantes_hoy": max(0, tope_dia - reg.get("mensajes", 0)),
+        "modo_cuota": "?",
         "limite_dia": tope_dia,
         "limite_minuto": int(CFG.get("LIMITE_MENSAJES_MINUTO") or 10),
         "tokens_hoy": reg.get("tokens", 0),
@@ -1127,6 +1405,10 @@ def estado(req: Request):
         "url_publica": url_publica(),
         "alumnos_configurados": len(alumnos()),
         "fase_api_keys": (CFG.get("ENABLE_STUDENT_API_KEYS", "false").lower() == "true"),
+        "cuota_por_clave": bool(clave_cta),
+        "mensajes_por_clave": tope_clave,
+        "usados_clave": usados_clave,
+        "restantes_clave": max(0, tope_clave - usados_clave) if clave_cta else None,
     }
 
 
@@ -1153,6 +1435,68 @@ def diag(req: Request):
         "cierres_limpios": len(CIERRES_PREGUNTA),
         "titubeos": len(HEDGES),
     }
+
+
+@app.post("/api/solicitud")
+async def pedir_solicitud(req: Request, body: dict = Body(...)):
+    """El alumno pide la API o comprar tokens: queda anotado para el admin."""
+    nombre = sesion(req)
+    if not nombre:
+        raise HTTPException(401, "sesion vencida")
+    puerta(req, "solicitud")
+    tipo = "api" if str(body.get("tipo") or "").lower().startswith("api") else "tokens"
+    lista = leer_solicitudes()
+    for sol in reversed(lista):
+        if misma(sol.get("alias", ""), nombre) and sol.get("tipo") == tipo and time.time() - float(sol.get("ts") or 0) < 12 * 3600:
+            return {"ok": True, "ya": True, "tipo": tipo}
+    lista.append({"alias": nombre, "tipo": tipo, "ts": time.time(),
+                  "fecha": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+                  "nota": str(body.get("nota") or "")[:200]})
+    guardar_solicitudes(lista[-800:])
+    seguro("solicitud " + tipo + " " + nombre)
+    return {"ok": True, "ya": False, "tipo": tipo}
+
+
+@app.get("/api/admin/solicitudes")
+def admin_solicitudes(req: Request):
+    solo_admin(req)
+    lista = leer_solicitudes()
+    return {"total": len(lista), "api": len([x for x in lista if x.get("tipo") == "api"]),
+            "tokens": len([x for x in lista if x.get("tipo") == "tokens"]),
+            "lista": list(reversed(lista[-60:]))}
+
+
+@app.post("/api/admin/solicitudes/borrar")
+def admin_solicitudes_borrar(req: Request):
+    solo_admin(req)
+    guardar_solicitudes([])
+    return {"ok": True}
+
+
+@app.post("/api/admin/cerrar-sesiones")
+def admin_cerrar_sesiones(req: Request):
+    """Rota el nonce: se caen todas las sesiones de admin menos la que aprieta el boton."""
+    solo_admin(req)
+    _nonce["valor"] = secrets.token_hex(8)
+    try:
+        ARCHIVO_NONCE.write_text(_nonce["valor"], encoding="utf-8")
+    except Exception:
+        pass
+    r = JSONResponse({"ok": True})
+    r.set_cookie(COOKIE_ADMIN, galleta_admin(), httponly=True, samesite="lax", secure=es_seguro(req),
+                 max_age=60 * 60 * 24 * 90)
+    seguro("nonce admin rotado")
+    return r
+
+
+@app.get("/api/admin/seguridad")
+def admin_seguridad(req: Request):
+    solo_admin(req)
+    try:
+        lineas = ARCHIVO_SEGURIDAD.read_text(encoding="utf-8", errors="ignore").splitlines()[-80:]
+    except Exception:
+        lineas = []
+    return {"eventos": list(reversed(lineas)), "ip_actual": "", "tope_cuerpo_mb": TOPE_CUERPO // 1048576}
 
 
 @app.get("/api/uso")
@@ -1218,6 +1562,7 @@ async def chat(req: Request, body: dict = Body(...)):
     if not mensajes or mensajes[-1]["role"] != "user":
         raise HTTPException(400, "falta el mensaje del alumno")
 
+    puerta(req, "chat")
     u = leer_uso()
     comprobar_limites(u, nombre)
     anotar(u, nombre)
@@ -1439,6 +1784,12 @@ async def chat(req: Request, body: dict = Body(...)):
                                              "cortados con un comentario: completos y ejecutables. Solo esos bloques.]",
                                              "\n\n**Los mismos bloques, completos y sin abreviar**\n\n"):
                         yield t
+            # verificacion final: si el codigo no compila, se pide el bloque corregido
+            if pide_cod and bloque_python_roto(visible):
+                for t in await pedir_mas("[el bloque de código tiene un error de sintaxis. Devolvé el mismo bloque "
+                                         "corregido, completo y ejecutable, sin '...' y sin explicar nada.]",
+                                         "\n\n**Bloque corregido y verificado**\n\n"):
+                    yield t
             # ninguna cerca puede quedar abierta, pase lo que pase
             if visible.count("```") % 2 == 1:
                 yield "data: " + json.dumps({"t": "\n```\n"}) + "\n\n"

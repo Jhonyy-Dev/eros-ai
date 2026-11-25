@@ -70,6 +70,17 @@
   <h2>consumo del día</h2>
   <table><thead><tr><th>alumno</th><th>mensajes</th><th>tokens</th><th>costo</th><th>última</th></tr></thead><tbody id="uso"></tbody></table>
 
+
+  <h2>solicitudes de alumnos (API / tokens)</h2>
+  <div class="tarjetas" id="solTarjetas"></div>
+  <table style="margin-top:12px"><thead><tr><th>fecha</th><th>alumno</th><th>pide</th></tr></thead><tbody id="solicitudes"></tbody></table>
+  <div class="alta"><button id="borrarSolicitudes">Borrar el historial de solicitudes</button>
+    <span class="nota">Cada alumno queda anotado una vez cada 12 h por tipo. Sirve para medir si conviene alquilar la API o vender tokens.</span></div>
+
+  <h2>seguridad</h2>
+  <div class="tarjetas" id="segTarjetas"></div>
+  <div class="alta"><button id="cerrarSesiones">Cerrar todas las sesiones de admin</button></div>
+  <pre class="mono" id="segLog" style="font-size:12px;max-height:240px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:10px;white-space:pre-wrap"></pre>
   <h2>últimas peticiones</h2>
   <table><thead><tr><th>hora</th><th>alumno</th><th>entrada</th><th>salida</th><th>costo</th></tr></thead><tbody id="ultimas"></tbody></table>
 
@@ -91,6 +102,29 @@
 <script>
 const $ = s => document.querySelector(s);
 const num = n => (n || 0).toLocaleString('es');
+
+async function pintarSolicitudes(){
+  try {
+    const d = await (await fetch('/api/admin/solicitudes')).json();
+    $('#solTarjetas').innerHTML =
+      '<div class="tarjeta"><b>' + (d.api || 0) + '</b><span>quieren la API</span></div>' +
+      '<div class="tarjeta"><b>' + (d.tokens || 0) + '</b><span>quieren comprar tokens</span></div>' +
+      '<div class="tarjeta"><b>' + (d.total || 0) + '</b><span>solicitudes totales</span></div>';
+    $('#solicitudes').innerHTML = (d.lista || []).map(x =>
+      '<tr><td class="mono">' + (x.fecha || '') + '</td><td>' + (x.alias || '') + '</td><td>' +
+      (x.tipo === 'api' ? 'la API' : 'tokens') + '</td></tr>').join('');
+  } catch(e){}
+}
+async function pintarSeguridad(){
+  try {
+    const d = await (await fetch('/api/admin/seguridad')).json();
+    $('#segTarjetas').innerHTML = '<div class="tarjeta"><b>' + (d.eventos || []).length +
+      '</b><span>eventos guardados</span></div><div class="tarjeta"><b>' + (d.tope_cuerpo_mb || 2) +
+      ' MB</b><span>tope por petición</span></div>';
+    $('#segLog').textContent = (d.eventos || []).join('\n') || 'sin eventos por ahora';
+  } catch(e){}
+}
+
 function decir(t, ms = 6000){ const o = $('#ok'); o.textContent = t; o.style.display = 'block'; clearTimeout(o._t); o._t = setTimeout(() => o.style.display = 'none', ms); }
 async function copiar(t){
   try { await copiar(t); return true; } catch(e){ return false; }
@@ -169,6 +203,9 @@ $('#copiarTodo').onclick = async () => {
   await navigator.clipboard.writeText(texto); decir('copiado:\n' + texto);
 };
 document.addEventListener('click', async e => {
+  if (e.target.id === 'borrarSolicitudes'){ await api('/api/admin/solicitudes/borrar'); pintarSolicitudes(); decir('Solicitudes borradas.'); }
+  if (e.target.id === 'cerrarSesiones'){ await api('/api/admin/cerrar-sesiones'); decir('Listo: se cayeron todas las otras sesiones de admin.'); }
+
   const r = e.target.closest('[data-rotar]');
   if (r) { const j = await api('/api/admin/rotar', { nombre: r.dataset.rotar }); if (j) { decir('código nuevo de ' + j.nombre + ': ' + j.codigo); pintar(); } }
   const b = e.target.closest('[data-borrar]');
@@ -191,6 +228,8 @@ document.addEventListener('click', async e => {
 });
 $('#nuevoNombre').addEventListener('keydown', e => { if (e.key === 'Enter') $('#crear').click(); });
 pintar(); setInterval(pintar, 10000);
+setInterval(() => { pintarSolicitudes(); pintarSeguridad(); }, 10000);
+pintarSolicitudes(); pintarSeguridad();
 </script>
 </body>
 </html>
